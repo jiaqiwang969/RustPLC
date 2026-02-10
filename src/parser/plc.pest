@@ -1,0 +1,54 @@
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+NEWLINE = _{ "\r\n" | "\n" }
+COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
+
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+number = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+
+string_literal = @{ "\"" ~ ("\\\"" | !"\"" ~ ANY)* ~ "\"" }
+state_reference = @{ identifier ~ "." ~ identifier }
+duration_value = @{ number ~ ("ms" | "s") }
+measured_value = @{ number ~ ASCII_ALPHA+ }
+boolean_value = { "true" | "false" }
+
+section_topology = { "[" ~ "topology" ~ "]" }
+
+device_type = {
+    "digital_output"
+    | "digital_input"
+    | "solenoid_valve"
+    | "cylinder"
+    | "sensor"
+    | "motor"
+}
+
+attribute_name = {
+    "connected_to"
+    | "response_time"
+    | "stroke_time"
+    | "retract_time"
+    | "stroke"
+    | "type"
+    | "detects"
+    | "debounce"
+    | "inverted"
+    | "rated_speed"
+    | "ramp_time"
+}
+
+attribute_value = {
+    state_reference
+    | duration_value
+    | measured_value
+    | string_literal
+    | boolean_value
+    | identifier
+}
+
+attribute = { attribute_name ~ ":" ~ attribute_value }
+attribute_block = { "{" ~ attribute ~ ("," ~ attribute)* ~ ","? ~ "}" }
+
+device_declaration = { "device" ~ identifier ~ ":" ~ device_type ~ attribute_block? }
+
+topology_section = { section_topology ~ device_declaration* }
+topology_file = { SOI ~ topology_section ~ EOI }

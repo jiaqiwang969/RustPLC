@@ -3,6 +3,7 @@
 - Keep public module declarations centralized in `src/lib.rs`; implementation files live at `src/<module>/mod.rs`.
 - For early story scaffolding, keep module placeholders compiling so CLI and library can evolve incrementally without breaking builds.
 - Model DSL enums with `serde(rename_all = "snake_case")` and tagged enums so serialized AST tokens stay aligned with DSL keywords.
+- In pest grammars, define silent `WHITESPACE` and `COMMENT` rules so inline `#` comments and multiline section formatting parse without extra boilerplate.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -36,4 +37,20 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `cargo clippy` is unavailable in this toolchain unless the clippy component is installed (`rustup component add clippy`).
   - Useful context (e.g., "the evaluation panel is in component X")
     - `StepStatement` is modeled as a tagged enum, so parser work can map each DSL statement kind directly without extra wrapper types.
+---
+## [2026-02-11 01:39:19 CST] - US-003
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added `src/parser/plc.pest` with topology-section PEG rules covering `[topology]`, bare port declarations, attribute blocks, all required device types, and all required topology attribute keys.
+  - Added parser entrypoint `parse_topology` in `src/parser/mod.rs` using `pest_derive::Parser` against `parser/plc.pest`.
+  - Added parser unit tests for the PRD 5.3 topology sample and an additional topology case that exercises every supported device type plus identifier/string/duration/measured/state-reference value forms.
+- Files changed
+  - `src/parser/plc.pest`, `src/parser/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Defining topology grammar values as a prioritized union (`state_reference` before `identifier`) avoids partial matches when parsing dotted tokens like `cyl_A.extended`.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - Keep keyword-limited `attribute_name` and `device_type` rules explicit in PEG so unsupported topology keys/types fail fast instead of being accepted as generic identifiers.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - `parse_topology` currently validates syntax only; AST lowering for topology/constraints/tasks is expected in a later parser story.
 ---
