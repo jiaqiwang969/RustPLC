@@ -2,6 +2,7 @@
 ## Codebase Patterns
 - Keep public module declarations centralized in `src/lib.rs`; implementation files live at `src/<module>/mod.rs`.
 - For early story scaffolding, keep module placeholders compiling so CLI and library can evolve incrementally without breaking builds.
+- Model DSL enums with `serde(rename_all = "snake_case")` and tagged enums so serialized AST tokens stay aligned with DSL keywords.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -19,4 +20,20 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `python` shim is unavailable in this environment; use `python3` for JSON/text automation scripts.
   - Useful context (e.g., "the evaluation panel is in component X")
     - This story established the baseline crate structure; subsequent parser/AST stories can add logic directly in existing module files.
+---
+## [2026-02-11 01:31:17 CST] - US-002
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Replaced the AST placeholder with typed syntax tree models for topology, constraints, and tasks sections.
+  - Added device/constraint/task enums and structs covering all required DSL categories (device types, attributes, safety/timing/causality constraints, actions, wait/timeout/goto/on_complete/parallel/race/allow_indefinite_wait/unreachable).
+  - Derived `Debug`, `Clone`, `Serialize`, and `Deserialize` for all AST-facing data structures to support parser output and downstream serialization.
+- Files changed
+  - `src/ast/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Keeping AST enums `snake_case` via serde attributes avoids ad-hoc keyword conversion once parser lowering starts.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `cargo clippy` is unavailable in this toolchain unless the clippy component is installed (`rustup component add clippy`).
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - `StepStatement` is modeled as a tagged enum, so parser work can map each DSL statement kind directly without extra wrapper types.
 ---
