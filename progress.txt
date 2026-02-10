@@ -4,6 +4,8 @@
 - For early story scaffolding, keep module placeholders compiling so CLI and library can evolve incrementally without breaking builds.
 - Model DSL enums with `serde(rename_all = "snake_case")` and tagged enums so serialized AST tokens stay aligned with DSL keywords.
 - In pest grammars, define silent `WHITESPACE` and `COMMENT` rules so inline `#` comments and multiline section formatting parse without extra boilerplate.
+- For block-style DSL sections, parse optional `reason: "..."` clauses directly in each declaration rule so indented multiline annotations remain valid without separate line handling.
+- In nested `parallel`/`race` grammar, require branch bodies to consume concrete statements so step-level directives are not misparsed as branch labels.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -53,4 +55,36 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - Keep keyword-limited `attribute_name` and `device_type` rules explicit in PEG so unsupported topology keys/types fail fast instead of being accepted as generic identifiers.
   - Useful context (e.g., "the evaluation panel is in component X")
     - `parse_topology` currently validates syntax only; AST lowering for topology/constraints/tasks is expected in a later parser story.
+---
+## [2026-02-11 01:44:22 CST] - US-004
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Extended `src/parser/plc.pest` with `[constraints]` grammar coverage for `safety` (`conflicts_with` + `requires`), `timing` (`must_complete_within` + `must_start_after`), and `causality` chain declarations.
+  - Added shared grammar primitives for `timing_scope`, causality arrows, and optional `reason: "..."` clauses so both inline and indented reason annotations parse correctly.
+  - Added parser API `parse_constraints` and unit tests for the PRD 5.4 constraints sample plus a focused case covering `requires` and `must_start_after`.
+- Files changed
+  - `src/parser/plc.pest`, `src/parser/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Keeping section-specific parse entrypoints (`parse_topology`, `parse_constraints`) makes it easy to ship grammar stories incrementally while preserving isolated test coverage.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `timing` scopes are intentionally constrained to `task.<name>` or `task.<name>.<step>`; broad identifier chains would over-accept invalid DSL forms.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Constraint parsing is still syntax-only; semantic validation for device/task existence and chain connectivity is deferred to later semantic/verification stories.
+---
+## [2026-02-11 07:26:44 CST] - US-005
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Extended `src/parser/plc.pest` with `[tasks]` grammar for task/step declarations, action/wait/timeout/goto statements, `on_complete`, and `allow_indefinite_wait`.
+  - Added nested control-flow grammar support for `parallel` and `race` blocks, including branch parsing and `then: goto` handling in race branches.
+  - Added `parse_tasks` in `src/parser/mod.rs` plus parser unit tests covering PRD sections 5.5.1 through 5.5.5.
+- Files changed
+  - `src/parser/plc.pest`, `src/parser/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Task grammar entrypoints follow the same section-scoped API pattern as existing parser functions (`parse_topology`/`parse_constraints`), which keeps parser stories independently testable.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - In PEG branch grammars, letting branch bodies be empty can cause tokens like `timeout:` to be accidentally treated as new branch labels; require concrete branch content to avoid this.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Current task parsing remains syntax-only; AST lowering for task statements is still pending the dedicated parser-to-AST story.
 ---

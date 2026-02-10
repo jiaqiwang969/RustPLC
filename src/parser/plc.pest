@@ -12,6 +12,8 @@ measured_value = @{ number ~ ASCII_ALPHA+ }
 boolean_value = { "true" | "false" }
 
 section_topology = { "[" ~ "topology" ~ "]" }
+section_constraints = { "[" ~ "constraints" ~ "]" }
+section_tasks = { "[" ~ "tasks" ~ "]" }
 
 device_type = {
     "digital_output"
@@ -52,3 +54,88 @@ device_declaration = { "device" ~ identifier ~ ":" ~ device_type ~ attribute_blo
 
 topology_section = { section_topology ~ device_declaration* }
 topology_file = { SOI ~ topology_section ~ EOI }
+
+safety_relation = { "conflicts_with" | "requires" }
+safety_constraint = {
+    "safety" ~ ":" ~ state_reference ~ safety_relation ~ state_reference ~ reason_clause?
+}
+
+timing_scope = { "task" ~ "." ~ identifier ~ ("." ~ identifier)? }
+timing_relation = { "must_complete_within" | "must_start_after" }
+timing_constraint = {
+    "timing" ~ ":" ~ timing_scope ~ timing_relation ~ duration_value ~ reason_clause?
+}
+
+causality_chain = { identifier ~ ("->" ~ identifier)+ }
+causality_constraint = { "causality" ~ ":" ~ causality_chain ~ reason_clause? }
+
+reason_clause = { "reason" ~ ":" ~ string_literal }
+
+constraint_declaration = {
+    safety_constraint
+    | timing_constraint
+    | causality_constraint
+}
+
+constraints_section = { section_constraints ~ constraint_declaration* }
+constraints_file = { SOI ~ constraints_section ~ EOI }
+
+action_command = {
+    "extend" ~ identifier
+    | "retract" ~ identifier
+    | "set" ~ identifier ~ ("on" | "off")
+    | "log" ~ string_literal
+}
+
+condition_operand = { state_reference | identifier }
+condition_value = {
+    boolean_value
+    | number
+    | string_literal
+    | state_reference
+    | identifier
+}
+
+action_statement = { "action" ~ ":" ~ action_command }
+wait_statement = { "wait" ~ ":" ~ condition_operand ~ ("==" | "!=") ~ condition_value }
+goto_statement = { "goto" ~ identifier }
+timeout_statement = { "timeout" ~ ":" ~ duration_value ~ "->" ~ goto_statement }
+allow_indefinite_wait_statement = { "allow_indefinite_wait" ~ ":" ~ boolean_value }
+then_goto_statement = { "then" ~ ":" ~ goto_statement }
+
+parallel_branch_statement = {
+    action_statement
+    | wait_statement
+    | timeout_statement
+    | allow_indefinite_wait_statement
+    | goto_statement
+}
+parallel_branch = { identifier ~ ":" ~ parallel_branch_statement+ }
+parallel_statement = { "parallel" ~ ":" ~ parallel_branch+ }
+
+race_branch_statement = {
+    action_statement
+    | wait_statement
+    | timeout_statement
+    | allow_indefinite_wait_statement
+    | goto_statement
+}
+race_branch = { identifier ~ ":" ~ race_branch_statement+ ~ then_goto_statement }
+race_statement = { "race" ~ ":" ~ race_branch+ }
+
+step_statement = {
+    action_statement
+    | wait_statement
+    | timeout_statement
+    | goto_statement
+    | parallel_statement
+    | race_statement
+    | allow_indefinite_wait_statement
+}
+step_declaration = { "step" ~ identifier ~ ":" ~ step_statement* }
+
+on_complete_statement = { "on_complete" ~ ":" ~ (goto_statement | "unreachable") }
+task_declaration = { "task" ~ identifier ~ ":" ~ step_declaration* ~ on_complete_statement? }
+
+tasks_section = { section_tasks ~ task_declaration* }
+tasks_file = { SOI ~ tasks_section ~ EOI }
