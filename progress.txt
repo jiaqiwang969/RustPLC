@@ -1,0 +1,22 @@
+# Ralph Progress Log
+## Codebase Patterns
+- Keep public module declarations centralized in `src/lib.rs`; implementation files live at `src/<module>/mod.rs`.
+- For early story scaffolding, keep module placeholders compiling so CLI and library can evolve incrementally without breaking builds.
+Started: Wed Feb 11 01:14:39 CST 2026
+---
+## [2026-02-11 01:19:50 CST] - US-001
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Initialized Cargo project `rust_plc` with required dependencies (`pest`, `pest_derive`, `petgraph`, `serde`, `serde_json`, `thiserror`).
+  - Added `src/lib.rs` module exports and placeholder module files for `parser`, `ast`, `ir`, `semantic`, and `error`.
+  - Replaced default CLI with argument validation that accepts exactly one `.plc` file path.
+- Files changed
+  - `Cargo.toml`, `Cargo.lock`, `src/main.rs`, `src/lib.rs`, `src/parser/mod.rs`, `src/ast/mod.rs`, `src/ir/mod.rs`, `src/semantic/mod.rs`, `src/error/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Library-facing modules are declared in `src/lib.rs` even when implementation is still a placeholder.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `python` shim is unavailable in this environment; use `python3` for JSON/text automation scripts.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - This story established the baseline crate structure; subsequent parser/AST stories can add logic directly in existing module files.
+---

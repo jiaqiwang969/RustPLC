@@ -1,4 +1,4 @@
-﻿{
+{
   "project": "RustPLC",
   "branchName": "ralph/phase1-2-parser-and-verification",
   "description": "Phase 1+2: DSL 解析器、语义分析器与形式化验证引擎 — 解析 .plc 文件生成 AST，构建 IR（TopologyGraph、StateMachine、ConstraintSet、TimingModel），并完成四项形式化验证（Safety、Liveness、Timing、Causality）",
@@ -17,7 +17,7 @@
         "类型检查通过"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
