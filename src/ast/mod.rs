@@ -82,6 +82,8 @@ pub struct ConstraintsSection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SafetyConstraint {
+    #[serde(default)]
+    pub line: usize,
     pub left: StateReference,
     pub relation: SafetyRelation,
     pub right: StateReference,
@@ -97,6 +99,8 @@ pub enum SafetyRelation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimingConstraint {
+    #[serde(default)]
+    pub line: usize,
     pub target: TimingTarget,
     pub relation: TimingRelation,
     pub duration: DurationValue,
@@ -119,6 +123,8 @@ pub enum TimingTarget {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CausalityConstraint {
+    #[serde(default)]
+    pub line: usize,
     pub chain: Vec<StateReference>,
     pub reason: Option<String>,
 }

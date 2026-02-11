@@ -10,6 +10,7 @@
 - In nested `parallel`/`race` grammar, require branch bodies to consume concrete statements so step-level directives are not misparsed as branch labels.
 - In semantic topology lowering, treat `connected_to` as upstream linkage (`target -> current`) so causality traversals follow physical flow direction.
 - Preserve directive line metadata in AST (e.g., `GotoDirective.line`, `TaskDeclaration.on_complete_line`) so semantic passes can report precise line-numbered errors without reparsing source text.
+- For constraint semantic validation, seed known device states from device-type defaults plus `sensor.detects` references before checking `safety` state expressions.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -161,4 +162,23 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - If you add semantic checks for control-flow directives, ensure parser captures directive line numbers in AST; otherwise diagnostics regress to coarse task-level line reporting.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Parallel/race lowering introduces synthetic state names (e.g., `step__parallel_1_fork`, `step__race_1_branch_2`) inside the same task namespace, so downstream verifiers should treat `State.step_name` as an opaque identifier rather than a DSL step token.
+---
+
+## [2026-02-11 09:49:05 CST] - US-010
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Implemented `build_constraint_set` / `build_constraint_set_from_ast` to lower AST constraints into IR `ConstraintSet` (safety, timing, causality) with semantic validation.
+  - Added constraint reference checks for undefined devices, undefined states, and undefined timing task/step scopes, returning Chinese line-numbered diagnostics.
+  - Implemented `build_timing_model` / `build_timing_model_from_ast` to derive action timing intervals from topology physical attributes (`stroke_time`, `retract_time`, `response_time`, `ramp_time`), including nested parallel/race actions.
+  - Extended AST + parser constraint nodes with line metadata (`SafetyConstraint.line`, `TimingConstraint.line`, `CausalityConstraint.line`) so constraint diagnostics can point to exact source lines.
+  - Added semantic unit tests covering PRD 5.4 constraint extraction/timing-model values and undefined reference error reporting.
+- Files changed
+  - `src/semantic/mod.rs`, `src/ast/mod.rs`, `src/parser/mod.rs`, `prd.json`, `progress.txt`, `.ralph_logs/iter_9.log`, `.ralph_logs/iter_10.log`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Constraint validation is most stable when state legality is inferred from both device-type defaults and topology `detects` declarations.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - If semantic errors must report constraint line numbers, parser must persist line metadata on each constraint AST node (not only on tasks/topology).
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - `TimingModel` extraction now recursively traverses `parallel`/`race` branch statements, so action timing coverage is no longer limited to top-level step statements.
 ---

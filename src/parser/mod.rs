@@ -221,6 +221,7 @@ fn parse_safety_constraint(pair: Pair<Rule>) -> Result<SafetyConstraint, PlcErro
     }
 
     Ok(SafetyConstraint {
+        line,
         left: left.ok_or_else(|| PlcError::parse(line, "safety 约束缺少左侧状态"))?,
         relation: relation.ok_or_else(|| PlcError::parse(line, "safety 约束缺少关系符"))?,
         right: right.ok_or_else(|| PlcError::parse(line, "safety 约束缺少右侧状态"))?,
@@ -255,6 +256,7 @@ fn parse_timing_constraint(pair: Pair<Rule>) -> Result<TimingConstraint, PlcErro
     }
 
     Ok(TimingConstraint {
+        line,
         target: target.ok_or_else(|| PlcError::parse(line, "timing 约束缺少作用域"))?,
         relation: relation.ok_or_else(|| PlcError::parse(line, "timing 约束缺少关系符"))?,
         duration: duration.ok_or_else(|| PlcError::parse(line, "timing 约束缺少时长"))?,
@@ -321,7 +323,11 @@ fn parse_causality_constraint(pair: Pair<Rule>) -> Result<CausalityConstraint, P
         return Err(PlcError::parse(line, "causality 链路至少需要两个设备节点"));
     }
 
-    Ok(CausalityConstraint { chain, reason })
+    Ok(CausalityConstraint {
+        line,
+        chain,
+        reason,
+    })
 }
 
 fn parse_reason_clause(pair: Pair<Rule>) -> Result<String, PlcError> {

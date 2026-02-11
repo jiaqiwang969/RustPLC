@@ -1,17 +1,20 @@
 use crate::ast::{
     ActionStatement, BinaryValue as AstBinaryValue, ComparisonOperator, ConditionExpression,
-    DeviceType, GotoDirective, LiteralValue, OnCompleteDirective, ParallelBlock, PlcProgram,
-    RaceBlock, StepStatement, TaskDeclaration, TasksSection, TimeUnit, TimeoutDirective,
-    TopologySection, WaitStatement,
+    ConstraintsSection, DeviceType, DurationValue, GotoDirective, LiteralValue,
+    OnCompleteDirective, ParallelBlock, PlcProgram, RaceBlock, SafetyRelation as AstSafetyRelation,
+    StepStatement, TaskDeclaration, TasksSection, TimeUnit, TimeoutDirective,
+    TimingRelation as AstTimingRelation, TimingTarget, TopologySection, WaitStatement,
 };
 use crate::error::PlcError;
 use crate::ir::{
-    BinaryValue as IrBinaryValue, ConnectionType, Device, DeviceKind, State, StateMachine,
-    TimerOperation, TimerOperationKind, TopologyGraph, Transition, TransitionAction,
-    TransitionGuard,
+    ActionKind, ActionRef, ActionTiming, BinaryValue as IrBinaryValue, CausalityChain,
+    ConnectionType, ConstraintSet, Device, DeviceKind, SafetyRelation as IrSafetyRelation,
+    SafetyRule, State, StateExpr, StateMachine, TimeInterval, TimerOperation, TimerOperationKind,
+    TimingModel, TimingRelation as IrTimingRelation, TimingRule, TimingScope, TopologyGraph,
+    Transition, TransitionAction, TransitionGuard,
 };
 use petgraph::graph::NodeIndex;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 struct DeviceNode {
@@ -25,6 +28,14 @@ pub fn build_topology_graph(program: &PlcProgram) -> Result<TopologyGraph, Vec<P
 
 pub fn build_state_machine(program: &PlcProgram) -> Result<StateMachine, Vec<PlcError>> {
     build_state_machine_from_ast(&program.tasks)
+}
+
+pub fn build_constraint_set(program: &PlcProgram) -> Result<ConstraintSet, Vec<PlcError>> {
+    build_constraint_set_from_ast(&program.topology, &program.constraints, &program.tasks)
+}
+
+pub fn build_timing_model(program: &PlcProgram) -> Result<TimingModel, Vec<PlcError>> {
+    build_timing_model_from_ast(&program.topology, &program.tasks)
 }
 
 pub fn build_topology_from_ast(topology: &TopologySection) -> Result<TopologyGraph, Vec<PlcError>> {
@@ -83,6 +94,124 @@ pub fn build_topology_from_ast(topology: &TopologySection) -> Result<TopologyGra
 
     if errors.is_empty() {
         Ok(topology_graph)
+    } else {
+        Err(errors)
+    }
+}
+
+pub fn build_constraint_set_from_ast(
+    topology: &TopologySection,
+    constraints: &ConstraintsSection,
+    tasks: &TasksSection,
+) -> Result<ConstraintSet, Vec<PlcError>> {
+    let mut errors = Vec::new();
+    let mut constraint_set = ConstraintSet::default();
+
+    let device_kinds = collect_device_kinds(topology);
+    let known_states = collect_known_states(topology, &device_kinds);
+    let task_steps = collect_task_steps(tasks);
+
+    for safety in &constraints.safety {
+        validate_state_reference(
+            &safety.left,
+            safety.line,
+            "safety 左侧",
+            &device_kinds,
+            &known_states,
+            &mut errors,
+        );
+        validate_state_reference(
+            &safety.right,
+            safety.line,
+            "safety 右侧",
+            &device_kinds,
+            &known_states,
+            &mut errors,
+        );
+
+        constraint_set.safety.push(SafetyRule {
+            left: StateExpr {
+                device: safety.left.device.clone(),
+                state: safety.left.state.clone(),
+            },
+            relation: map_safety_relation(&safety.relation),
+            right: StateExpr {
+                device: safety.right.device.clone(),
+                state: safety.right.state.clone(),
+            },
+            reason: safety.reason.clone(),
+        });
+    }
+
+    for timing in &constraints.timing {
+        validate_timing_target(&timing.target, timing.line, &task_steps, &mut errors);
+
+        constraint_set.timing.push(TimingRule {
+            scope: map_timing_scope(&timing.target),
+            relation: map_timing_relation(&timing.relation),
+            duration_ms: duration_value_to_ms(&timing.duration),
+            reason: timing.reason.clone(),
+        });
+    }
+
+    for causality in &constraints.causality {
+        for node in &causality.chain {
+            validate_device_reference(
+                &node.device,
+                causality.line,
+                "causality",
+                &device_kinds,
+                &mut errors,
+            );
+        }
+
+        constraint_set.causality.push(CausalityChain {
+            devices: causality
+                .chain
+                .iter()
+                .map(|node| node.device.clone())
+                .collect(),
+            reason: causality.reason.clone(),
+        });
+    }
+
+    if errors.is_empty() {
+        Ok(constraint_set)
+    } else {
+        Err(errors)
+    }
+}
+
+pub fn build_timing_model_from_ast(
+    topology: &TopologySection,
+    tasks: &TasksSection,
+) -> Result<TimingModel, Vec<PlcError>> {
+    let device_profiles = collect_device_timing_profiles(topology);
+    let mut intervals = BTreeMap::new();
+    let mut errors = Vec::new();
+
+    for task in &tasks.tasks {
+        for step in &task.steps {
+            let mut actions = Vec::new();
+            collect_actions(&step.statements, &mut actions);
+
+            for action in actions {
+                if let Some(action_timing) = action_to_timing(
+                    &task.name,
+                    &step.name,
+                    step.line,
+                    &action,
+                    &device_profiles,
+                    &mut errors,
+                ) {
+                    insert_action_timing(&mut intervals, action_timing);
+                }
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(TimingModel { intervals })
     } else {
         Err(errors)
     }
@@ -329,6 +458,336 @@ struct AnalyzedStatements {
     timeouts: Vec<TimeoutDirective>,
     parallel_blocks: Vec<ParallelBlock>,
     race_blocks: Vec<RaceBlock>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct DeviceTimingProfile {
+    response_ms: Option<u64>,
+    stroke_ms: Option<u64>,
+    retract_ms: Option<u64>,
+    ramp_ms: Option<u64>,
+}
+
+fn collect_device_kinds(topology: &TopologySection) -> HashMap<String, DeviceKind> {
+    topology
+        .devices
+        .iter()
+        .map(|device| {
+            (
+                device.name.clone(),
+                ast_type_to_ir_kind(&device.device_type),
+            )
+        })
+        .collect()
+}
+
+fn collect_known_states(
+    topology: &TopologySection,
+    device_kinds: &HashMap<String, DeviceKind>,
+) -> HashMap<String, HashSet<String>> {
+    let mut known_states = HashMap::new();
+
+    for (name, kind) in device_kinds {
+        let mut states = HashSet::new();
+        for state in default_states_for_kind(kind) {
+            states.insert(state.to_string());
+        }
+        known_states.insert(name.clone(), states);
+    }
+
+    for device in &topology.devices {
+        if let Some(detects) = &device.attributes.detects {
+            known_states
+                .entry(detects.device.clone())
+                .or_default()
+                .insert(detects.state.clone());
+        }
+    }
+
+    known_states
+}
+
+fn collect_task_steps(tasks: &TasksSection) -> HashMap<String, HashSet<String>> {
+    let mut task_steps = HashMap::new();
+
+    for task in &tasks.tasks {
+        let steps = task
+            .steps
+            .iter()
+            .map(|step| step.name.clone())
+            .collect::<HashSet<_>>();
+        task_steps.insert(task.name.clone(), steps);
+    }
+
+    task_steps
+}
+
+fn validate_state_reference(
+    state: &crate::ast::StateReference,
+    line: usize,
+    source: &str,
+    device_kinds: &HashMap<String, DeviceKind>,
+    known_states: &HashMap<String, HashSet<String>>,
+    errors: &mut Vec<PlcError>,
+) {
+    let Some(_) = device_kinds.get(&state.device) else {
+        errors.push(PlcError::semantic(
+            line,
+            format!("{source} 引用了未定义设备 {}", state.device),
+        ));
+        return;
+    };
+
+    if state.state.is_empty() {
+        errors.push(PlcError::semantic(
+            line,
+            format!("{source} 设备 {} 缺少状态名", state.device),
+        ));
+        return;
+    }
+
+    let Some(allowed_states) = known_states.get(&state.device) else {
+        return;
+    };
+
+    if !allowed_states.is_empty() && !allowed_states.contains(&state.state) {
+        errors.push(PlcError::semantic(
+            line,
+            format!(
+                "{source} 引用了设备 {} 的未定义状态 {}",
+                state.device, state.state
+            ),
+        ));
+    }
+}
+
+fn validate_device_reference(
+    device_name: &str,
+    line: usize,
+    source: &str,
+    device_kinds: &HashMap<String, DeviceKind>,
+    errors: &mut Vec<PlcError>,
+) {
+    if !device_kinds.contains_key(device_name) {
+        errors.push(PlcError::semantic(
+            line,
+            format!("{source} 引用了未定义设备 {device_name}"),
+        ));
+    }
+}
+
+fn validate_timing_target(
+    target: &TimingTarget,
+    line: usize,
+    task_steps: &HashMap<String, HashSet<String>>,
+    errors: &mut Vec<PlcError>,
+) {
+    match target {
+        TimingTarget::Task { task } => {
+            if !task_steps.contains_key(task) {
+                errors.push(PlcError::semantic(
+                    line,
+                    format!("timing 约束引用了未定义 task {task}"),
+                ));
+            }
+        }
+        TimingTarget::Step { task, step } => {
+            let Some(steps) = task_steps.get(task) else {
+                errors.push(PlcError::semantic(
+                    line,
+                    format!("timing 约束引用了未定义 task {task}"),
+                ));
+                return;
+            };
+
+            if !steps.contains(step) {
+                errors.push(PlcError::semantic(
+                    line,
+                    format!("timing 约束引用了未定义 step {task}.{step}"),
+                ));
+            }
+        }
+    }
+}
+
+fn map_safety_relation(relation: &AstSafetyRelation) -> IrSafetyRelation {
+    match relation {
+        AstSafetyRelation::ConflictsWith => IrSafetyRelation::ConflictsWith,
+        AstSafetyRelation::Requires => IrSafetyRelation::Requires,
+    }
+}
+
+fn map_timing_scope(target: &TimingTarget) -> TimingScope {
+    match target {
+        TimingTarget::Task { task } => TimingScope::Task { task: task.clone() },
+        TimingTarget::Step { task, step } => TimingScope::Step {
+            task: task.clone(),
+            step: step.clone(),
+        },
+    }
+}
+
+fn map_timing_relation(relation: &AstTimingRelation) -> IrTimingRelation {
+    match relation {
+        AstTimingRelation::MustCompleteWithin => IrTimingRelation::MustCompleteWithin,
+        AstTimingRelation::MustStartAfter => IrTimingRelation::MustStartAfter,
+    }
+}
+
+fn collect_device_timing_profiles(
+    topology: &TopologySection,
+) -> HashMap<String, DeviceTimingProfile> {
+    topology
+        .devices
+        .iter()
+        .map(|device| {
+            (
+                device.name.clone(),
+                DeviceTimingProfile {
+                    response_ms: device
+                        .attributes
+                        .response_time
+                        .as_ref()
+                        .map(duration_value_to_ms),
+                    stroke_ms: device
+                        .attributes
+                        .stroke_time
+                        .as_ref()
+                        .map(duration_value_to_ms),
+                    retract_ms: device
+                        .attributes
+                        .retract_time
+                        .as_ref()
+                        .map(duration_value_to_ms),
+                    ramp_ms: device
+                        .attributes
+                        .ramp_time
+                        .as_ref()
+                        .map(duration_value_to_ms),
+                },
+            )
+        })
+        .collect()
+}
+
+fn collect_actions(statements: &[StepStatement], actions: &mut Vec<ActionStatement>) {
+    for statement in statements {
+        match statement {
+            StepStatement::Action(action) => actions.push(action.clone()),
+            StepStatement::Parallel(block) => {
+                for branch in &block.branches {
+                    collect_actions(&branch.statements, actions);
+                }
+            }
+            StepStatement::Race(block) => {
+                for branch in &block.branches {
+                    collect_actions(&branch.statements, actions);
+                }
+            }
+            StepStatement::Wait(_)
+            | StepStatement::Timeout(_)
+            | StepStatement::Goto(_)
+            | StepStatement::AllowIndefiniteWait(_) => {}
+        }
+    }
+}
+
+fn action_to_timing(
+    task_name: &str,
+    step_name: &str,
+    line: usize,
+    action: &ActionStatement,
+    profiles: &HashMap<String, DeviceTimingProfile>,
+    errors: &mut Vec<PlcError>,
+) -> Option<ActionTiming> {
+    let (action_kind, target) = match action {
+        ActionStatement::Extend { target } => (ActionKind::Extend, Some(target.as_str())),
+        ActionStatement::Retract { target } => (ActionKind::Retract, Some(target.as_str())),
+        ActionStatement::Set { target, .. } => (ActionKind::Set, Some(target.as_str())),
+        ActionStatement::Log { .. } => (ActionKind::Log, None),
+    };
+
+    let Some(target) = target else {
+        return None;
+    };
+
+    let Some(profile) = profiles.get(target) else {
+        errors.push(PlcError::semantic(
+            line,
+            format!("action 引用了未定义设备 {target}"),
+        ));
+        return None;
+    };
+
+    let duration_ms = match action_kind {
+        ActionKind::Extend => profile
+            .stroke_ms
+            .or(profile.response_ms)
+            .or(profile.ramp_ms),
+        ActionKind::Retract => profile
+            .retract_ms
+            .or(profile.response_ms)
+            .or(profile.ramp_ms),
+        ActionKind::Set => profile.ramp_ms.or(profile.response_ms),
+        ActionKind::Log => None,
+    }?;
+
+    Some(ActionTiming {
+        action: ActionRef {
+            task_name: task_name.to_string(),
+            step_name: step_name.to_string(),
+            action_kind,
+            target: Some(target.to_string()),
+        },
+        interval: TimeInterval {
+            min_ms: duration_ms,
+            max_ms: duration_ms,
+        },
+    })
+}
+
+fn insert_action_timing(intervals: &mut BTreeMap<String, ActionTiming>, timing: ActionTiming) {
+    let action_name = action_kind_name(&timing.action.action_kind);
+    let target = timing.action.target.as_deref().unwrap_or("_");
+    let base_key = format!(
+        "{}.{}.{}.{}",
+        timing.action.task_name, timing.action.step_name, action_name, target
+    );
+
+    if !intervals.contains_key(&base_key) {
+        intervals.insert(base_key, timing);
+        return;
+    }
+
+    let mut duplicate_index = 2usize;
+    loop {
+        let key = format!("{base_key}.{duplicate_index}");
+        if !intervals.contains_key(&key) {
+            intervals.insert(key, timing);
+            return;
+        }
+        duplicate_index += 1;
+    }
+}
+
+fn action_kind_name(action_kind: &ActionKind) -> &'static str {
+    match action_kind {
+        ActionKind::Extend => "extend",
+        ActionKind::Retract => "retract",
+        ActionKind::Set => "set",
+        ActionKind::Log => "log",
+    }
+}
+
+fn default_states_for_kind(kind: &DeviceKind) -> &'static [&'static str] {
+    match kind {
+        DeviceKind::Cylinder => &["extended", "retracted"],
+        DeviceKind::DigitalOutput
+        | DeviceKind::DigitalInput
+        | DeviceKind::SolenoidValve
+        | DeviceKind::Sensor
+        | DeviceKind::Motor => &["on", "off"],
+    }
 }
 
 fn completion_target_for_step(
@@ -772,9 +1231,13 @@ fn literal_to_expression(literal: &LiteralValue) -> String {
 }
 
 fn duration_to_ms(timeout: &TimeoutDirective) -> u64 {
-    match timeout.duration.unit {
-        TimeUnit::Ms => timeout.duration.value,
-        TimeUnit::S => timeout.duration.value.saturating_mul(1000),
+    duration_value_to_ms(&timeout.duration)
+}
+
+fn duration_value_to_ms(duration: &DurationValue) -> u64 {
+    match duration.unit {
+        TimeUnit::Ms => duration.value,
+        TimeUnit::S => duration.value.saturating_mul(1000),
     }
 }
 
@@ -814,8 +1277,10 @@ fn device_kind_name(kind: &DeviceKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_state_machine, build_topology_graph};
-    use crate::ir::{ConnectionType, TransitionGuard};
+    use super::{
+        build_constraint_set, build_state_machine, build_timing_model, build_topology_graph,
+    };
+    use crate::ir::{ConnectionType, SafetyRelation, TimingRelation, TimingScope, TransitionGuard};
     use crate::parser::parse_plc;
     use petgraph::visit::EdgeRef;
 
@@ -987,6 +1452,173 @@ device Y0: digital_output
         assert!(
             errors[0].to_string().contains("sensor") && errors[0].to_string().contains("cylinder"),
             "错误消息应包含不兼容的设备类型"
+        );
+    }
+
+    #[test]
+    fn builds_constraint_set_and_timing_model_from_prd_5_4_example() {
+        let input = r#"
+[topology]
+
+device Y0: digital_output
+device Y1: digital_output
+device motor_ctrl: motor {
+    connected_to: Y0,
+    ramp_time: 50ms
+}
+
+device valve_A: solenoid_valve {
+    connected_to: Y0,
+    response_time: 15ms
+}
+
+device valve_B: solenoid_valve {
+    connected_to: Y1,
+    response_time: 15ms
+}
+
+device cyl_A: cylinder {
+    connected_to: valve_A,
+    stroke_time: 200ms,
+    retract_time: 180ms
+}
+
+device cyl_B: cylinder {
+    connected_to: valve_B,
+    stroke_time: 300ms,
+    retract_time: 250ms
+}
+
+device sensor_A_ext: sensor {
+    connected_to: Y0,
+    detects: cyl_A.extended
+}
+
+device sensor_B_ext: sensor {
+    connected_to: Y1,
+    detects: cyl_B.extended
+}
+
+[constraints]
+
+safety: cyl_A.extended conflicts_with cyl_B.extended
+    reason: "A缸和B缸同时伸出会导致机械碰撞"
+
+safety: valve_A.on conflicts_with valve_B.on
+    reason: "气源压力不足以同时驱动两个阀"
+
+timing: task.init must_complete_within 5000ms
+    reason: "初始化超过5秒视为异常"
+
+timing: task.init.step_extend_A must_complete_within 500ms
+    reason: "单步动作不应超过500ms"
+
+causality: Y0 -> valve_A -> cyl_A -> sensor_A_ext
+    reason: "Y0 驱动 valve_A 推动 cyl_A 由 sensor_A_ext 检测"
+
+causality: Y1 -> valve_B -> cyl_B -> sensor_B_ext
+    reason: "Y1 驱动 valve_B 推动 cyl_B 由 sensor_B_ext 检测"
+
+[tasks]
+
+task init:
+    step step_extend_A:
+        action: extend cyl_A
+    step step_retract_A:
+        action: retract cyl_A
+
+task ready:
+    step start_motor:
+        action: set motor_ctrl on
+"#;
+
+        let program = parse_plc(input).expect("PRD 5.4 示例应能成功解析为 AST");
+        let constraints = build_constraint_set(&program).expect("应能构建约束集合");
+        let timing_model = build_timing_model(&program).expect("应能构建设备时序模型");
+
+        assert_eq!(constraints.safety.len(), 2);
+        assert_eq!(constraints.timing.len(), 2);
+        assert_eq!(constraints.causality.len(), 2);
+
+        assert!(matches!(
+            constraints.safety[0].relation,
+            SafetyRelation::ConflictsWith
+        ));
+        assert_eq!(constraints.safety[0].left.device, "cyl_A");
+        assert_eq!(constraints.safety[0].left.state, "extended");
+
+        assert!(matches!(
+            constraints.timing[0].scope,
+            TimingScope::Task { ref task } if task == "init"
+        ));
+        assert!(matches!(
+            constraints.timing[0].relation,
+            TimingRelation::MustCompleteWithin
+        ));
+        assert_eq!(constraints.timing[0].duration_ms, 5000);
+
+        assert!(matches!(
+            constraints.timing[1].scope,
+            TimingScope::Step { ref task, ref step } if task == "init" && step == "step_extend_A"
+        ));
+        assert_eq!(constraints.causality[0].devices.len(), 4);
+        assert_eq!(constraints.causality[0].devices[0], "Y0");
+        assert_eq!(constraints.causality[0].devices[3], "sensor_A_ext");
+
+        let extend_key = "init.step_extend_A.extend.cyl_A";
+        let retract_key = "init.step_retract_A.retract.cyl_A";
+        let motor_key = "ready.start_motor.set.motor_ctrl";
+
+        assert_eq!(timing_model.intervals[extend_key].interval.min_ms, 200);
+        assert_eq!(timing_model.intervals[extend_key].interval.max_ms, 200);
+        assert_eq!(timing_model.intervals[retract_key].interval.min_ms, 180);
+        assert_eq!(timing_model.intervals[motor_key].interval.min_ms, 50);
+    }
+
+    #[test]
+    fn reports_constraint_reference_errors_for_undefined_device_state_and_task() {
+        let input = r#"
+[topology]
+
+device cyl_A: cylinder {
+    stroke_time: 200ms,
+    retract_time: 180ms
+}
+
+[constraints]
+
+safety: cyl_A.invalid_state conflicts_with missing_device.on
+timing: task.unknown must_complete_within 100ms
+causality: cyl_A -> missing_device
+
+[tasks]
+
+task init:
+    step start:
+        action: extend cyl_A
+"#;
+
+        let program = parse_plc(input).expect("测试输入应能解析为 AST");
+        let errors = build_constraint_set(&program).expect_err("未定义引用应报错");
+
+        assert_eq!(errors.len(), 4);
+        assert!(
+            errors
+                .iter()
+                .any(|err| err.to_string().contains("未定义状态 invalid_state")),
+            "应报告未定义状态"
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|err| err.to_string().contains("未定义设备 missing_device")),
+            "应报告未定义设备"
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|err| err.to_string().contains("未定义 task unknown")),
+            "应报告未定义 task"
         );
     }
 
