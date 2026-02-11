@@ -17,6 +17,7 @@
 - For causality verification, augment TopologyGraph with logical edges from `detects.device -> sensor` before running reachability, otherwise output-to-sensor chains may appear disconnected.
 - Liveness checks should combine AST metadata (`allow_indefinite_wait`, `on_complete`) with StateMachine transitions; IR guards alone cannot reconstruct all wait exemptions.
 - Keep Z3-backed safety verification behind the `z3-solver` cargo feature so default `cargo test` stays runnable on toolchains without `cmake`/libz3.
+- Keep machine-readable IR JSON on stdout and print human verification summaries to stderr so automation can parse output while users still get readable reports.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -296,4 +297,23 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `z3` with `static-link-z3` requires `cmake`; if the environment lacks it, keep solver usage feature-gated and ensure default checks run without optional native toolchain dependencies.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Safety checker returns `SafetyReport { level, explored_depth, warnings }`, which future verification orchestration (US-017) can surface directly in aggregated CLI verification output.
+---
+
+## [2026-02-11 16:48:24 CST] - US-017
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Extended `src/verification/mod.rs` into a unified verification orchestrator (`verify_all`) that runs Safety/Liveness/Timing/Causality in one pass, collects all failures, and normalizes each issue into `位置/原因/分析/建议` output.
+  - Updated CLI pipeline in `src/main.rs` to execute full flow `解析 -> 语义分析 -> 验证 -> 报告`; success now prints a verification summary (including safety proof level) while still emitting machine-readable JSON IR.
+  - Added `verification` payload to CLI JSON output so downstream tooling can read Safety proof level (`完备证明`/`有界验证`) plus each checker status.
+  - Added `examples/error_all_verifiers.plc` to intentionally trigger safety + liveness + timing + causality violations in one file for end-to-end aggregated error verification.
+  - Updated integration tests to cover: two valid examples passing all four checks, CLI success summary + JSON output, and combined-error example reporting all four verifier types.
+- Files changed
+  - `src/verification/mod.rs`, `src/main.rs`, `tests/examples_integration.rs`, `examples/error_all_verifiers.plc`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Verification orchestration should run all checkers even after the first failure so users receive a complete diagnostic set in a single compile.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - Keep success summaries out of stdout (use stderr) when stdout is consumed as JSON by tests/tools.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - `verify_all` already maps checker-specific diagnostics into a unified format, so future verifiers can plug in by only adding one conversion path in `src/verification/mod.rs`.
 ---

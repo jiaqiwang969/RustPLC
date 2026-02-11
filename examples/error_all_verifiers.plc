@@ -1,0 +1,59 @@
+[topology]
+
+device Y0: digital_output
+device Y1: digital_output
+device X0: digital_input
+device X1: digital_input
+
+device valve_A: solenoid_valve {
+    connected_to: Y0
+    response_time: 20ms
+}
+
+device valve_B: solenoid_valve {
+    connected_to: Y1
+    response_time: 20ms
+}
+
+device cyl_A: cylinder {
+    connected_to: valve_A
+    stroke_time: 200ms
+    retract_time: 200ms
+}
+
+device cyl_B: cylinder {
+    connected_to: valve_B
+    stroke_time: 200ms
+    retract_time: 200ms
+}
+
+device sensor_A_ext: sensor {
+    type: magnetic
+    connected_to: X0
+    detects: cyl_A.extended
+}
+
+device sensor_B_ext: sensor {
+    type: magnetic
+    connected_to: X1
+    detects: cyl_B.extended
+}
+
+[constraints]
+
+safety: cyl_A.extended conflicts_with cyl_B.extended
+
+timing: task.main must_complete_within 50ms
+
+causality: Y0 -> valve_A -> cyl_B -> sensor_B_ext
+
+[tasks]
+
+task main:
+    step trigger:
+        parallel:
+            branch_A:
+                action: extend cyl_A
+            branch_B:
+                action: extend cyl_B
+        wait: sensor_B_ext == true
