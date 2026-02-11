@@ -48,7 +48,7 @@ attribute_value = {
 }
 
 attribute = { attribute_name ~ ":" ~ attribute_value }
-attribute_block = { "{" ~ attribute ~ ("," ~ attribute)* ~ ","? ~ "}" }
+attribute_block = { "{" ~ attribute ~ ((","? ~ attribute))* ~ ","? ~ "}" }
 
 device_declaration = { "device" ~ identifier ~ ":" ~ device_type ~ attribute_block? }
 
@@ -80,14 +80,20 @@ constraint_declaration = {
 constraints_section = { section_constraints ~ constraint_declaration* }
 constraints_file = { SOI ~ constraints_section ~ EOI }
 
+action_extend = { "extend" ~ identifier }
+action_retract = { "retract" ~ identifier }
+binary_output_value = { "on" | "off" }
+action_set = { "set" ~ identifier ~ binary_output_value }
+action_log = { "log" ~ string_literal }
 action_command = {
-    "extend" ~ identifier
-    | "retract" ~ identifier
-    | "set" ~ identifier ~ ("on" | "off")
-    | "log" ~ string_literal
+    action_extend
+    | action_retract
+    | action_set
+    | action_log
 }
 
 condition_operand = { state_reference | identifier }
+comparison_operator = { "==" | "!=" }
 condition_value = {
     boolean_value
     | number
@@ -97,7 +103,7 @@ condition_value = {
 }
 
 action_statement = { "action" ~ ":" ~ action_command }
-wait_statement = { "wait" ~ ":" ~ condition_operand ~ ("==" | "!=") ~ condition_value }
+wait_statement = { "wait" ~ ":" ~ condition_operand ~ comparison_operator ~ condition_value }
 goto_statement = { "goto" ~ identifier }
 timeout_statement = { "timeout" ~ ":" ~ duration_value ~ "->" ~ goto_statement }
 allow_indefinite_wait_statement = { "allow_indefinite_wait" ~ ":" ~ boolean_value }
@@ -139,3 +145,5 @@ task_declaration = { "task" ~ identifier ~ ":" ~ step_declaration* ~ on_complete
 
 tasks_section = { section_tasks ~ task_declaration* }
 tasks_file = { SOI ~ tasks_section ~ EOI }
+
+plc_file = { SOI ~ topology_section ~ constraints_section ~ tasks_section ~ EOI }

@@ -1,5 +1,6 @@
 # Ralph Progress Log
 ## Codebase Patterns
+- In parser-to-AST lowering, unwrap wrapper PEG rules (e.g., `constraint_declaration`, `step_statement`) before matching concrete rule kinds, or valid nodes can be silently skipped.
 - Keep public module declarations centralized in `src/lib.rs`; implementation files live at `src/<module>/mod.rs`.
 - For early story scaffolding, keep module placeholders compiling so CLI and library can evolve incrementally without breaking builds.
 - Model DSL enums with `serde(rename_all = "snake_case")` and tagged enums so serialized AST tokens stay aligned with DSL keywords.
@@ -87,4 +88,21 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - In PEG branch grammars, letting branch bodies be empty can cause tokens like `timeout:` to be accidentally treated as new branch labels; require concrete branch content to avoid this.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Current task parsing remains syntax-only; AST lowering for task statements is still pending the dedicated parser-to-AST story.
+---
+## [2026-02-11 08:53:35 CST] - US-006
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added full parser-to-AST builder entrypoint `parse_plc` that parses `[topology]`, `[constraints]`, and `[tasks]` into `PlcProgram` with typed AST nodes.
+  - Implemented detailed lowering helpers for devices/attributes, safety-timing-causality constraints, task-step statements, nested `parallel`/`race` branches, and directives (`timeout`, `goto`, `on_complete`, `allow_indefinite_wait`).
+  - Added parser error mapping to `PlcError` with line-numbered Chinese diagnostics and added a regression test to assert line reporting on syntax failures.
+  - Added end-to-end AST construction tests for PRD 6.3 and PRD 9 complete PLC examples with key field assertions.
+- Files changed
+  - `.ralph_logs/iter_4.log`, `.ralph_logs/iter_5.log`, `.ralph_logs/iter_6.log`, `src/parser/mod.rs`, `src/parser/plc.pest`, `src/error/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Parser lowering is most robust when each grammar wrapper rule is unwrapped immediately, then dispatched by concrete sub-rule for AST conversion.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `Pair::into_inner()` consumes the pair; preserve `pair.as_str()` beforehand when fallback logic needs original token text (e.g., `on_complete: unreachable`).
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Causality chains in current AST are stored as `Vec<StateReference>` using device names with empty `state`; downstream IR/semantic stories should normalize this to explicit device-chain representation.
 ---
