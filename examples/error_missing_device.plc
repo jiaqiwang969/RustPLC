@@ -1,0 +1,16 @@
+[topology]
+
+device Y0: digital_output
+
+device valve_A: solenoid_valve {
+    connected_to: Y9
+    response_time: 20ms
+}
+
+[constraints]
+
+[tasks]
+
+task init:
+    step start:
+        action: log "start"

@@ -12,6 +12,7 @@
 - Preserve directive line metadata in AST (e.g., `GotoDirective.line`, `TaskDeclaration.on_complete_line`) so semantic passes can report precise line-numbered errors without reparsing source text.
 - For constraint semantic validation, seed known device states from device-type defaults plus `sensor.detects` references before checking `safety` state expressions.
 - Use `PlcError` constructors (`undefined_reference` / `type_mismatch` / `duplicate_definition`) so diagnostics share unified ERROR blocks with `位置/原因/建议` fields.
+- For end-to-end compilation paths (CLI/tests), run all four semantic builders and aggregate their errors so users get complete diagnostics in one run.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -200,4 +201,21 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - If parser errors need precise columns, map `pest::error::LineColLocation` explicitly; line-only helpers silently lose column info.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Existing semantic tests assert Chinese substrings (e.g., undefined task/device phrases), so new error variants should preserve recognizable wording in rendered output.
+---
+
+## [2026-02-11 10:13:24 CST] - US-012
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added `examples/two_cylinder.plc` (PRD 6.3 double-cylinder sequence), `examples/half_rotation.plc` (PRD 9 half-rotation workflow), and `examples/error_missing_device.plc` (intentional undefined-device reference).
+  - Replaced the CLI placeholder with a real compile pipeline in `src/main.rs`: read `.plc`, parse to AST, run all semantic lowerings (topology/state machine/constraints/timing model), and print pretty JSON IR to stdout.
+  - Added integration tests in `tests/examples_integration.rs` to validate the two valid examples compile to JSON IR, the error example returns an undefined-device diagnostic, and `cargo run -- examples/two_cylinder.plc` emits JSON on stdout.
+- Files changed
+  - `src/main.rs`, `examples/two_cylinder.plc`, `examples/half_rotation.plc`, `examples/error_missing_device.plc`, `tests/examples_integration.rs`, `prd.json`, `progress.txt`, `.ralph_logs/iter_11.log`, `.ralph_logs/iter_12.log`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - End-to-end compile paths are most useful when they collect errors from every semantic stage instead of failing fast on the first stage.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - The half-rotation timing scope must reference the actual step name (`task.search.detect`), otherwise timing semantic validation reports an undefined step.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Integration tests can invoke the built CLI binary via `env!("CARGO_BIN_EXE_rust_plc")` to assert real stdout behavior.
 ---

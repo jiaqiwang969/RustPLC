@@ -6,8 +6,10 @@ provider: codex
 approval: never
 sandbox: danger-full-access
 reasoning effort: high
-reasoning summaries: auto
-session id: 019c4a65-9342-78f0-a40d-c9e62b852f68
+reasoning summar
+Ralph completed all tasks!
+Completed at iteration 1 of 1
+
 --------
 user
 # Ralph Agent Instructions
@@ -2749,4 +2751,764 @@ index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c4
 thinking
 **Committing changes with story details**
 exec
-/bin/bash -lc "bash -lc 'git add -A && git commit -m \"feat: [US-011] - [实现错误报告系统]\"'" in /mnt/e/personal_project/rust_plc
+/bin/bash -lc "bash -lc 'git add -A && git commit -m \"feat: [US-011] - [实现错误报告系统]\"'" in /mnt/e/personal_project/rust_plc succeeded in 459ms:
+[ralph/phase1-2-parser-and-verification 787f597] feat: [US-011] - [实现错误报告系统]
+ 7 files changed, 3199 insertions(+), 41 deletions(-)
+ create mode 100644 .ralph_logs/iter_11.log
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Confirming clean status**
+exec
+/bin/bash -lc "bash -lc 'git status --short'" in /mnt/e/personal_project/rust_plc succeeded in 58ms:
+ M .ralph_logs/iter_11.log
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Assessing log file auto-modification impact**
+Plan update
+US-011 is fully implemented, validated, documented, and committed.
+  ✓ Inspect PRD/story requirements and current error handling implementation for US-011
+  ✓ Implement unified PlcError model with location/reason support and update parser/semantic call sites as needed
+  ✓ Add/adjust unit tests for error formatting and run project quality checks
+  ✓ Update PRD/progress docs and commit changes for completed story
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Planning test pass verification**
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json
+from pathlib import Path
+p=json.loads(Path('prd.json').read_text())
+remaining=[s['id'] for s in p['userStories'] if not s.get('passes')]
+print('remaining',len(remaining))
+print(','.join(remaining[:5]))
+PY" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+remaining 6
+US-012,US-013,US-014,US-015,US-016
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Planning detailed change references**
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/error/mod.rs | sed -n \"1,260p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+     1	use std::error::Error;
+     2	use std::fmt;
+     3	
+     4	const DEFAULT_FILE: &str = "<input>";
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct SourceLocation {
+     8	    pub file: String,
+     9	    pub line: usize,
+    10	    pub column: usize,
+    11	}
+    12	
+    13	impl SourceLocation {
+    14	    pub fn new(file: impl Into<String>, line: usize, column: usize) -> Self {
+    15	        Self {
+    16	            file: file.into(),
+    17	            line,
+    18	            column,
+    19	        }
+    20	    }
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/error/mod.rs | sed -n \"260,360p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+   260	            } => {
+   261	                let detail = if let Some(context) = context {
+   262	                    format!("{context} 类型不匹配，期望 {expected}，实际 {found}")
+   263	                } else {
+   264	                    format!("类型不匹配，期望 {expected}，实际 {found}")
+   265	                };
+   266	                write_error_block(
+   267	                    f,
+   268	                    "type_mismatch",
+   269	                    "类型不匹配",
+   270	                    location,
+   271	                    &detail,
+   272	                    reason.as_deref(),
+   273	                )
+   274	            }
+   275	            Self::DuplicateDefinition {
+   276	                location,
+   277	                definition_type,
+   278	                name,
+   279	                reason,
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Adding parser line numbers**
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/parser/mod.rs | sed -n \"848,870p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+   848	        .next()
+   849	        .ok_or_else(|| PlcError::parse(line, format!("{context} 缺少内部结构")))
+   850	}
+   851	
+   852	fn line_of(pair: &Pair<Rule>) -> usize {
+   853	    pair.as_span().start_pos().line_col().0
+   854	}
+   855	
+   856	fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+   857	    let (line, col) = match err.line_col {
+   858	        LineColLocation::Pos((line, col)) => (line, col),
+   859	        LineColLocation::Span((line, col), _) => (line, col),
+   860	    };
+   861	
+   862	    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+   863	}
+   864	
+   865	#[cfg(test)]
+   866	mod tests {
+   867	    use super::{parse_constraints, parse_plc, parse_tasks, parse_topology};
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Identifying changed constructors**
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/semantic/mod.rs | sed -n \"52,95p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+    52	
+    53	        device_nodes.insert(device.name.clone(), DeviceNode { index, kind });
+    54	    }
+    55	
+    56	    for device in &topology.devices {
+    57	        let Some(target_name) = device.attributes.connected_to.as_deref() else {
+    58	            continue;
+    59	        };
+    60	
+    61	        let Some(target_node) = device_nodes.get(target_name) else {
+    62	            errors.push(PlcError::undefined_reference_with_reason(
+    63	                device.line,
+    64	                "设备",
+    65	                target_name,
+    66	                format!(
+    67	                    "设备 {} 的 connected_to 引用了该名称，请先定义后再连接",
+    68	                    device.name
+    69	                ),
+    70	            ));
+    71	            continue;
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Identifying missing semantic lines**
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/semantic/mod.rs | sed -n \"238,262p\"'" in /mnt/e/personal_project/rust_plc succeeded in 50ms:
+   238	            ));
+   239	            continue;
+   240	        }
+   241	
+   242	        let initial_state = State {
+   243	            task_name: task.name.clone(),
+   244	            step_name: task.steps[0].name.clone(),
+   245	        };
+   246	
+   247	        if task_initial_states
+   248	            .insert(task.name.clone(), initial_state)
+   249	            .is_some()
+   250	        {
+   251	            errors.push(PlcError::duplicate_definition_with_reason(
+   252	                task.line,
+   253	                "task",
+   254	                &task.name,
+   255	                "请确保每个 task 名称唯一",
+   256	            ));
+   257	        }
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/semantic/mod.rs | sed -n \"528,618p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+   528	
+   529	fn validate_state_reference(
+   530	    state: &crate::ast::StateReference,
+   531	    line: usize,
+   532	    source: &str,
+   533	    device_kinds: &HashMap<String, DeviceKind>,
+   534	    known_states: &HashMap<String, HashSet<String>>,
+   535	    errors: &mut Vec<PlcError>,
+   536	) {
+   537	    let Some(_) = device_kinds.get(&state.device) else {
+   538	        errors.push(PlcError::undefined_reference_with_reason(
+   539	            line,
+   540	            "设备",
+   541	            &state.device,
+   542	            format!("{source} 使用前需要先在 [topology] 段定义设备"),
+   543	        ));
+   544	        return;
+   545	    };
+   546	
+   547	    if state.state.is_empty() {
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Preparing key action lines**
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/semantic/mod.rs | sed -n \"712,742p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+   712	    profiles: &HashMap<String, DeviceTimingProfile>,
+   713	    errors: &mut Vec<PlcError>,
+   714	) -> Option<ActionTiming> {
+   715	    let (action_kind, target) = match action {
+   716	        ActionStatement::Extend { target } => (ActionKind::Extend, Some(target.as_str())),
+   717	        ActionStatement::Retract { target } => (ActionKind::Retract, Some(target.as_str())),
+   718	        ActionStatement::Set { target, .. } => (ActionKind::Set, Some(target.as_str())),
+   719	        ActionStatement::Log { .. } => (ActionKind::Log, None),
+   720	    };
+   721	
+   722	    let Some(target) = target else {
+   723	        return None;
+   724	    };
+   725	
+   726	    let Some(profile) = profiles.get(target) else {
+   727	        errors.push(PlcError::undefined_reference_with_reason(
+   728	            line,
+   729	            "设备",
+   730	            target,
+   731	            "请先在 [topology] 段定义该设备并补充物理参数".to_string(),
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+exec
+/bin/bash -lc "bash -lc 'nl -ba src/semantic/mod.rs | sed -n \"1180,1202p\"'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+  1180	
+  1181	fn resolve_task_target(
+  1182	    target_task: &str,
+  1183	    line: usize,
+  1184	    task_initial_states: &HashMap<String, State>,
+  1185	    errors: &mut Vec<PlcError>,
+  1186	    source: &str,
+  1187	) -> Option<State> {
+  1188	    let Some(state) = task_initial_states.get(target_task) else {
+  1189	        errors.push(PlcError::undefined_reference_with_reason(
+  1190	            line,
+  1191	            " task",
+  1192	            target_task,
+  1193	            format!("{source} 目标必须是已定义 task 名称"),
+  1194	        ));
+  1195	        return None;
+  1196	    };
+  1197	
+  1198	    Some(state.clone())
+  1199	}
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Planning line reference extraction**
+exec
+/bin/bash -lc "bash -lc 'rg -n \"\\\"id\\\": \\\"US-011\\\"|\\\"passes\\\"\" prd.json | head -n 20'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+20:      "passes": true,
+37:      "passes": true,
+56:      "passes": true,
+74:      "passes": true,
+95:      "passes": true,
+112:      "passes": true,
+129:      "passes": true,
+147:      "passes": true,
+169:      "passes": true,
+187:      "passes": true,
+191:      "id": "US-011",
+204:      "passes": true,
+222:      "passes": false,
+240:      "passes": false,
+263:      "passes": false,
+284:      "passes": false,
+312:      "passes": false,
+330:      "passes": false,
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Searching for US-011 occurrences**
+exec
+/bin/bash -lc "bash -lc 'rg -n \"\\[2026-02-11 10:02:12 CST\\] - US-011|Codebase Patterns|PlcError constructors\" progress.txt'" in /mnt/e/personal_project/rust_plc succeeded in 51ms:
+2:## Codebase Patterns
+186:## [2026-02-11 10:02:12 CST] - US-011
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Identifying insertion point**
+exec
+/bin/bash -lc "bash -lc 'rg -n \"PlcError constructors\" progress.txt'" in /mnt/e/personal_project/rust_plc exited 1 in 51ms:
+
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Searching for undefined reference**
+exec
+/bin/bash -lc "bash -lc 'rg -n \"undefined_reference|type_mismatch|duplicate_definition\" progress.txt'" in /mnt/e/personal_project/rust_plc succeeded in 50ms:
+14:- Use `PlcError` constructors (`undefined_reference` / `type_mismatch` / `duplicate_definition`) so diagnostics share unified ERROR blocks with `位置/原因/建议` fields.
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Planning commit hash retrieval**
+exec
+/bin/bash -lc "bash -lc 'git rev-parse --short HEAD'" in /mnt/e/personal_project/rust_plc succeeded in 50ms:
+787f597
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+
+thinking
+**Outlining final response structure**
+codex
+Implemented **US-011 (实现错误报告系统)** end-to-end and committed it.
+
+- Built a unified error model with required variants and structured source location:
+  - `SourceLocation { file, line, column }` at `src/error/mod.rs:6`
+  - `PlcError` variants `ParseError / SemanticError / UndefinedReference / TypeMismatch / DuplicateDefinition` at `src/error/mod.rs:27`
+  - Added helper constructors (including reason-enabled constructors) at `src/error/mod.rs:60`
+- Implemented Chinese formatted error rendering in a consistent PRD-style block (`ERROR [...]`, `位置`, `原因`, optional `建议`) at `src/error/mod.rs:218` and `src/error/mod.rs:297`.
+- Added required unit tests:
+  - ParseError formatting test at `src/error/mod.rs:322`
+  - UndefinedReference formatting test at `src/error/mod.rs:333`
+- Parser now preserves parse error column info via pest `LineColLocation` and maps with `parse_at` at `src/parser/mod.rs:856`.
+- Semantic layer now emits typed errors where applicable (instead of only generic semantic strings), e.g.:
+  - undefined references and type mismatch in topology checks at `src/semantic/mod.rs:61`
+  - duplicate task definitions at `src/semantic/mod.rs:251`
+  - undefined references in constraint/timing/action/goto checks at `src/semantic/mod.rs:537`, `src/semantic/mod.rs:726`, `src/semantic/mod.rs:1188`
+
+Quality checks run and passed:
+
+- `cargo test`
+- `cargo check`
+
+Project tracking updates:
+
+- Marked `US-011` as passed in `prd.json:191` (with `passes: true` at `prd.json:204`)
+- Added reusable pattern to Codebase Patterns in `progress.txt:14`
+- Appended US-011 progress entry in `progress.txt:186`
+
+Commit created:
+
+- `787f597`
+- Message: `feat: [US-011] - [实现错误报告系统]`
+
+No `AGENTS.md` file exists under this project tree, so no AGENTS updates were needed.
+
+
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 37e805972ce7af2a25da5b6b4fa9d12d580e545e..c46c23dfb38103485f8c0031f80016c400429dac
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -854,12 +854,12 @@
+ }
+ 
+ fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
+-    let line = match err.line_col {
+-        LineColLocation::Pos((line, _)) => line,
+-        LineColLocation::Span((line, _), _) => line,
++    let (line, col) = match err.line_col {
++        LineColLocation::Pos((line, col)) => (line, col),
++        LineColLocation::Span((line, col), _) => (line, col),
+     };
+ 
+-    PlcError::parse(line, format!("语法解析失败: {err}"))
++    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
+ }
+ 
+ #[cfg(test)]
+
+tokens used
+2,180,705
+Implemented **US-011 (实现错误报告系统)** end-to-end and committed it.
+
+- Built a unified error model with required variants and structured source location:
+  - `SourceLocation { file, line, column }` at `src/error/mod.rs:6`
+  - `PlcError` variants `ParseError / SemanticError / UndefinedReference / TypeMismatch / DuplicateDefinition` at `src/error/mod.rs:27`
+  - Added helper constructors (including reason-enabled constructors) at `src/error/mod.rs:60`
+- Implemented Chinese formatted error rendering in a consistent PRD-style block (`ERROR [...]`, `位置`, `原因`, optional `建议`) at `src/error/mod.rs:218` and `src/error/mod.rs:297`.
+- Added required unit tests:
+  - ParseError formatting test at `src/error/mod.rs:322`
+  - UndefinedReference formatting test at `src/error/mod.rs:333`
+- Parser now preserves parse error column info via pest `LineColLocation` and maps with `parse_at` at `src/parser/mod.rs:856`.
+- Semantic layer now emits typed errors where applicable (instead of only generic semantic strings), e.g.:
+  - undefined references and type mismatch in topology checks at `src/semantic/mod.rs:61`
+  - duplicate task definitions at `src/semantic/mod.rs:251`
+  - undefined references in constraint/timing/action/goto checks at `src/semantic/mod.rs:537`, `src/semantic/mod.rs:726`, `src/semantic/mod.rs:1188`
+
+Quality checks run and passed:
+
+- `cargo test`
+- `cargo check`
+
+Project tracking updates:
+
+- Marked `US-011` as passed in `prd.json:191` (with `passes: true` at `prd.json:204`)
+- Added reusable pattern to Codebase Patterns in `progress.txt:14`
+- Appended US-011 progress entry in `progress.txt:186`
+
+Commit created:
+
+- `787f597`
+- Message: `feat: [US-011] - [实现错误报告系统]`
+
+No `AGENTS.md` file exists under this project tree, so no AGENTS updates were needed.
+
