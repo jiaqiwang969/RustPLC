@@ -59,11 +59,13 @@ pub fn build_topology_from_ast(topology: &TopologySection) -> Result<TopologyGra
         };
 
         let Some(target_node) = device_nodes.get(target_name) else {
-            errors.push(PlcError::semantic(
+            errors.push(PlcError::undefined_reference_with_reason(
                 device.line,
+                "设备",
+                target_name,
                 format!(
-                    "设备 {} 的 connected_to 引用了未定义设备 {}",
-                    device.name, target_name
+                    "设备 {} 的 connected_to 引用了该名称，请先定义后再连接",
+                    device.name
                 ),
             ));
             continue;
@@ -75,14 +77,14 @@ pub fn build_topology_from_ast(topology: &TopologySection) -> Result<TopologyGra
 
         let Some(connection_type) = connection_type_for(&target_node.kind, &current_node.kind)
         else {
-            errors.push(PlcError::semantic(
+            errors.push(PlcError::type_mismatch_with_reason(
                 device.line,
+                format!("可作为 {} 上游的设备", device_kind_name(&current_node.kind)),
+                device_kind_name(&target_node.kind),
+                format!("设备 {} 的 connected_to", device.name),
                 format!(
-                    "设备 {} ({}) 不能 connected_to 设备 {} ({})",
-                    device.name,
-                    device_kind_name(&current_node.kind),
-                    target_name,
-                    device_kind_name(&target_node.kind)
+                    "请检查 {} 与 {} 的连接方向，或调整为兼容设备类型",
+                    target_name, device.name
                 ),
             ));
             continue;
@@ -246,9 +248,11 @@ pub fn build_state_machine_from_ast(tasks: &TasksSection) -> Result<StateMachine
             .insert(task.name.clone(), initial_state)
             .is_some()
         {
-            errors.push(PlcError::semantic(
+            errors.push(PlcError::duplicate_definition_with_reason(
                 task.line,
-                format!("task {} 重复定义", task.name),
+                "task",
+                &task.name,
+                "请确保每个 task 名称唯一",
             ));
         }
 
@@ -531,9 +535,11 @@ fn validate_state_reference(
     errors: &mut Vec<PlcError>,
 ) {
     let Some(_) = device_kinds.get(&state.device) else {
-        errors.push(PlcError::semantic(
+        errors.push(PlcError::undefined_reference_with_reason(
             line,
-            format!("{source} 引用了未定义设备 {}", state.device),
+            "设备",
+            &state.device,
+            format!("{source} 使用前需要先在 [topology] 段定义设备"),
         ));
         return;
     };
@@ -569,9 +575,11 @@ fn validate_device_reference(
     errors: &mut Vec<PlcError>,
 ) {
     if !device_kinds.contains_key(device_name) {
-        errors.push(PlcError::semantic(
+        errors.push(PlcError::undefined_reference_with_reason(
             line,
-            format!("{source} 引用了未定义设备 {device_name}"),
+            "设备",
+            device_name,
+            format!("{source} 约束引用前需要定义该设备"),
         ));
     }
 }
@@ -585,17 +593,21 @@ fn validate_timing_target(
     match target {
         TimingTarget::Task { task } => {
             if !task_steps.contains_key(task) {
-                errors.push(PlcError::semantic(
+                errors.push(PlcError::undefined_reference_with_reason(
                     line,
-                    format!("timing 约束引用了未定义 task {task}"),
+                    " task",
+                    task,
+                    "请先在 [tasks] 段定义该 task".to_string(),
                 ));
             }
         }
         TimingTarget::Step { task, step } => {
             let Some(steps) = task_steps.get(task) else {
-                errors.push(PlcError::semantic(
+                errors.push(PlcError::undefined_reference_with_reason(
                     line,
-                    format!("timing 约束引用了未定义 task {task}"),
+                    " task",
+                    task,
+                    "请先在 [tasks] 段定义该 task".to_string(),
                 ));
                 return;
             };
@@ -712,9 +724,11 @@ fn action_to_timing(
     };
 
     let Some(profile) = profiles.get(target) else {
-        errors.push(PlcError::semantic(
+        errors.push(PlcError::undefined_reference_with_reason(
             line,
-            format!("action 引用了未定义设备 {target}"),
+            "设备",
+            target,
+            "请先在 [topology] 段定义该设备并补充物理参数".to_string(),
         ));
         return None;
     };
@@ -1172,9 +1186,11 @@ fn resolve_task_target(
     source: &str,
 ) -> Option<State> {
     let Some(state) = task_initial_states.get(target_task) else {
-        errors.push(PlcError::semantic(
+        errors.push(PlcError::undefined_reference_with_reason(
             line,
-            format!("{source} 引用了未定义 task {target_task}"),
+            " task",
+            target_task,
+            format!("{source} 目标必须是已定义 task 名称"),
         ));
         return None;
     };

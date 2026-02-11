@@ -854,12 +854,12 @@ fn line_of(pair: &Pair<Rule>) -> usize {
 }
 
 fn map_parse_error(err: pest::error::Error<Rule>) -> PlcError {
-    let line = match err.line_col {
-        LineColLocation::Pos((line, _)) => line,
-        LineColLocation::Span((line, _), _) => line,
+    let (line, col) = match err.line_col {
+        LineColLocation::Pos((line, col)) => (line, col),
+        LineColLocation::Span((line, col), _) => (line, col),
     };
 
-    PlcError::parse(line, format!("语法解析失败: {err}"))
+    PlcError::parse_at("<input>", line, col, format!("语法解析失败: {err}"))
 }
 
 #[cfg(test)]

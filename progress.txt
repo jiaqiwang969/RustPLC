@@ -11,6 +11,7 @@
 - In semantic topology lowering, treat `connected_to` as upstream linkage (`target -> current`) so causality traversals follow physical flow direction.
 - Preserve directive line metadata in AST (e.g., `GotoDirective.line`, `TaskDeclaration.on_complete_line`) so semantic passes can report precise line-numbered errors without reparsing source text.
 - For constraint semantic validation, seed known device states from device-type defaults plus `sensor.detects` references before checking `safety` state expressions.
+- Use `PlcError` constructors (`undefined_reference` / `type_mismatch` / `duplicate_definition`) so diagnostics share unified ERROR blocks with `位置/原因/建议` fields.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -181,4 +182,22 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - If semantic errors must report constraint line numbers, parser must persist line metadata on each constraint AST node (not only on tasks/topology).
   - Useful context (e.g., "the evaluation panel is in component X")
     - `TimingModel` extraction now recursively traverses `parallel`/`race` branch statements, so action timing coverage is no longer limited to top-level step statements.
+---
+## [2026-02-11 10:02:12 CST] - US-011
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Rebuilt `src/error/mod.rs` into a unified error-reporting system with `PlcError` variants covering `ParseError` / `SemanticError` / `UndefinedReference` / `TypeMismatch` / `DuplicateDefinition`.
+  - Added structured source location (`file`, `line`, `column`) and optional `reason` fields to every error variant, plus helper constructors for consistent creation.
+  - Implemented custom `Display` output in Chinese using a consistent multiline format (`ERROR [code]` + `位置` + `原因` + optional `建议`) aligned with PRD error-reporting goals.
+  - Updated parser parse-failure mapping to capture both line and column from pest parse errors, and updated semantic checks to emit typed `UndefinedReference` / `TypeMismatch` / `DuplicateDefinition` errors where appropriate.
+  - Added unit tests that verify formatted ParseError content (line/Chinese text) and UndefinedReference content (missing device name + suggestion).
+- Files changed
+  - `src/error/mod.rs`, `src/parser/mod.rs`, `src/semantic/mod.rs`, `prd.json`, `progress.txt`, `.ralph_logs/iter_10.log`, `.ralph_logs/iter_11.log`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Prefer `PlcError` typed constructors over ad-hoc semantic strings so all diagnostics share one output contract and future verifier stages can plug in directly.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - If parser errors need precise columns, map `pest::error::LineColLocation` explicitly; line-only helpers silently lose column info.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Existing semantic tests assert Chinese substrings (e.g., undefined task/device phrases), so new error variants should preserve recognizable wording in rendered output.
 ---
