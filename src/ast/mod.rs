@@ -14,6 +14,8 @@ pub struct TopologySection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceDeclaration {
+    #[serde(default)]
+    pub line: usize,
     pub name: String,
     pub device_type: DeviceType,
     pub attributes: DeviceAttributes,

@@ -4,6 +4,8 @@ use thiserror::Error;
 pub enum PlcError {
     #[error("第 {line} 行错误: {message}")]
     Parse { line: usize, message: String },
+    #[error("第 {line} 行语义错误: {message}")]
+    Semantic { line: usize, message: String },
 }
 
 impl PlcError {
@@ -14,9 +16,16 @@ impl PlcError {
         }
     }
 
+    pub fn semantic(line: usize, message: impl Into<String>) -> Self {
+        Self::Semantic {
+            line,
+            message: message.into(),
+        }
+    }
+
     pub fn line(&self) -> usize {
         match self {
-            Self::Parse { line, .. } => *line,
+            Self::Parse { line, .. } | Self::Semantic { line, .. } => *line,
         }
     }
 }

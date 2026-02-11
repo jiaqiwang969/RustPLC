@@ -8,6 +8,7 @@
 - In pest grammars, define silent `WHITESPACE` and `COMMENT` rules so inline `#` comments and multiline section formatting parse without extra boilerplate.
 - For block-style DSL sections, parse optional `reason: "..."` clauses directly in each declaration rule so indented multiline annotations remain valid without separate line handling.
 - In nested `parallel`/`race` grammar, require branch bodies to consume concrete statements so step-level directives are not misparsed as branch labels.
+- In semantic topology lowering, treat `connected_to` as upstream linkage (`target -> current`) so causality traversals follow physical flow direction.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -124,4 +125,21 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `petgraph::DiGraph` serialization requires the crate feature `serde-1`; adding derives alone is not enough.
   - Useful context (e.g., "the evaluation panel is in component X")
     - `TimingModel` currently stores action timing intervals keyed by deterministic strings (`task.step.action.target`) for straightforward lookup in upcoming semantic stories.
+---
+## [2026-02-11 09:16:45 CST] - US-008
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Implemented semantic topology lowering in `src/semantic/mod.rs` via `build_topology_graph`/`build_topology_from_ast`, converting AST devices into `TopologyGraph` nodes and `connected_to` relations into typed directed edges.
+  - Added topology semantic validation for undefined `connected_to` references and incompatible device-type connections, both returning Chinese semantic diagnostics with source line numbers.
+  - Extended AST device declarations with source line metadata and wired parser lowering to populate it, enabling semantic error reports to point to exact topology lines.
+  - Added semantic unit tests covering PRD 5.3 topology graph construction (node/edge counts + edge kinds) and both required failure paths (undefined reference, incompatible connection).
+- Files changed
+  - `src/semantic/mod.rs`, `src/ast/mod.rs`, `src/parser/mod.rs`, `src/error/mod.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Topology semantic checks use AST-carried `DeviceDeclaration.line` values for diagnostics; new semantic passes should keep line metadata on AST nodes they validate.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `connected_to` type compatibility is asymmetric in this model (`target -> current`), so validation must inspect `(target_kind, current_kind)` rather than `(current_kind, target_kind)`.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Current semantic API returns `Result<TopologyGraph, Vec<PlcError>>`, which is ready for future aggregation with StateMachine/ConstraintSet/TimingModel semantic errors.
 ---

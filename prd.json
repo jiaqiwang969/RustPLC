@@ -144,7 +144,7 @@
         "类型检查通过"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

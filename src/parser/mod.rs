@@ -85,6 +85,7 @@ fn parse_device_declaration(pair: Pair<Rule>) -> Result<DeviceDeclaration, PlcEr
     }
 
     Ok(DeviceDeclaration {
+        line,
         name: name.ok_or_else(|| PlcError::parse(line, "device 声明缺少名称"))?,
         device_type: device_type.ok_or_else(|| PlcError::parse(line, "device 声明缺少类型"))?,
         attributes,
