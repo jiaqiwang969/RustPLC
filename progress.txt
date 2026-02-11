@@ -1,5 +1,6 @@
 # Ralph Progress Log
 ## Codebase Patterns
+- For timing envelopes, include upstream `response_time` along `connected_to` chains and treat incoming `StateMachine` guards as must_start_after lower bounds (`timeout` contributes delay, `always/condition` = 0ms).
 - TopologyGraph JSON 调试依赖 `petgraph` 的 `serde-1` feature；若缺失会导致 DiGraph 无法序列化。
 - In parser-to-AST lowering, unwrap wrapper PEG rules (e.g., `constraint_declaration`, `step_statement`) before matching concrete rule kinds, or valid nodes can be silently skipped.
 - Keep public module declarations centralized in `src/lib.rs`; implementation files live at `src/<module>/mod.rs`.
@@ -238,4 +239,23 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `StepStatement` currently does not carry per-action/per-wait line metadata, so implicit causality diagnostics should fall back to `StepDeclaration.line` until finer-grained line fields are added.
   - Useful context (e.g., "the evaluation panel is in component X")
     - `verify_causality` accepts both AST (`PlcProgram`) and IR (`TopologyGraph`/`ConstraintSet`) so future verifier orchestrators can reuse semantic outputs while preserving source-line context.
+---
+
+## [2026-02-11 12:17:38 CST] - US-014
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added `src/verification/timing.rs` with `verify_timing` to validate `must_complete_within` and `must_start_after` timing rules against topology/constraints/state machine IR.
+  - Implemented worst-case timing envelopes: same-step actions are treated as parallel (max duration), step timeouts provide upper bounds, and task-level checks sum ordered step envelopes.
+  - Added physical chain timing inference that augments action duration with upstream device `response_time` along `connected_to` links (e.g., valve response + cylinder stroke).
+  - Added Chinese timing diagnostics with line numbers and structured `约束/分析/结论` output for both timing violation classes.
+  - Added four unit tests covering pass/fail cases for `must_complete_within` and `must_start_after`.
+- Files changed
+  - `src/verification/mod.rs`, `src/verification/timing.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - `must_start_after` is most robust when computed from inbound `StateMachine` transitions to the scoped task/step, using guard-implied minimum delay rather than AST-only heuristics.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - Timing scope diagnostics need AST line metadata from `program.constraints.timing[index].line`; IR `TimingRule` currently does not carry source line numbers.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Timing verifier APIs currently accept both semantic IR and the original AST program so error reports can preserve source-location precision.
 ---
