@@ -13,6 +13,7 @@
 - For constraint semantic validation, seed known device states from device-type defaults plus `sensor.detects` references before checking `safety` state expressions.
 - Use `PlcError` constructors (`undefined_reference` / `type_mismatch` / `duplicate_definition`) so diagnostics share unified ERROR blocks with `位置/原因/建议` fields.
 - For end-to-end compilation paths (CLI/tests), run all four semantic builders and aggregate their errors so users get complete diagnostics in one run.
+- For causality verification, augment TopologyGraph with logical edges from `detects.device -> sensor` before running reachability, otherwise output-to-sensor chains may appear disconnected.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -218,4 +219,23 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - The half-rotation timing scope must reference the actual step name (`task.search.detect`), otherwise timing semantic validation reports an undefined step.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Integration tests can invoke the built CLI binary via `env!("CARGO_BIN_EXE_rust_plc")` to assert real stdout behavior.
+---
+
+## [2026-02-11 12:00:41 CST] - US-013
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added causality verification module `src/verification/causality.rs` with `verify_causality`, using petgraph reachability over an augmented runtime graph (topology edges + `detects` logical edges) to validate every declared causality chain.
+  - Implemented implicit action+wait causality inference from task steps (including nested `parallel`/`race` branches) and connectivity checks from output ports through action targets to waited sensors.
+  - Added Chinese causality diagnostics with line numbers, broken-link details, expected/actual chain output, and repair suggestions matching PRD 3.2.4 style.
+  - Added unit tests for PRD 5.4 passing chains and missing `valve_A -> cyl_A` connection failure.
+  - Exposed verification module via `src/verification/mod.rs` and `src/lib.rs`.
+- Files changed
+  - `src/verification/causality.rs`, `src/verification/mod.rs`, `src/lib.rs`, `prd.json`, `progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Causality checks should run on an augmented graph that includes `sensor.detects` logical feedback edges, not only raw `connected_to` edges.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `StepStatement` currently does not carry per-action/per-wait line metadata, so implicit causality diagnostics should fall back to `StepDeclaration.line` until finer-grained line fields are added.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - `verify_causality` accepts both AST (`PlcProgram`) and IR (`TopologyGraph`/`ConstraintSet`) so future verifier orchestrators can reuse semantic outputs while preserving source-line context.
 ---
