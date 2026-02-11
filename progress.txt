@@ -16,6 +16,7 @@
 - For end-to-end compilation paths (CLI/tests), run all four semantic builders and aggregate their errors so users get complete diagnostics in one run.
 - For causality verification, augment TopologyGraph with logical edges from `detects.device -> sensor` before running reachability, otherwise output-to-sensor chains may appear disconnected.
 - Liveness checks should combine AST metadata (`allow_indefinite_wait`, `on_complete`) with StateMachine transitions; IR guards alone cannot reconstruct all wait exemptions.
+- Keep Z3-backed safety verification behind the `z3-solver` cargo feature so default `cargo test` stays runnable on toolchains without `cmake`/libz3.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -277,4 +278,22 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `on_complete: unreachable` cannot be validated from transition counts alone; you must analyze whether the final step still has non-jump control-flow paths.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Current line mapping for synthetic parallel/race states reuses the parent step line by splitting synthetic names at `__`, which keeps diagnostics stable for nested control-flow checks.
+---
+## [2026-02-11 13:39:32 CST] - US-016
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added `src/verification/safety.rs` implementing the Safety Checker for `conflicts_with` rules with bounded reachability analysis, Chinese diagnostics, and proof-level reporting (`Complete` vs `Bounded`).
+  - Added SCC-aware depth planning and `bmc_max_depth` truncation warnings, including bounded-proof warning output when depth caps prevent complete reasoning.
+  - Modeled parallel branch concurrency by merging sibling branch effects at synthetic `__parallel_*_join` states so simultaneous branch actions are evaluated as combined physical outcomes.
+  - Added optional Z3 integration scaffold behind cargo feature `z3-solver` and made `z3` an optional dependency so the default toolchain can run quality checks without local `cmake`.
+  - Added/kept unit tests for sequential-safe and parallel-conflict cases, SCC depth floor behavior, and bounded-depth warning behavior.
+- Files changed
+  - `Cargo.toml`, `Cargo.lock`, `src/verification/mod.rs`, `src/verification/safety.rs`, `prd.json`, `progress.txt`, `.ralph_logs/iter_16.log`, `.ralph_logs/iter_17.log`, `.ralph_logs/iter_18.log`, `.ralph_logs/iter_19.log`, `.ralph_logs/iter_20.log`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Parallel safety checks should aggregate all branch action effects at the synthetic parallel join state; branch-local transitions alone under-approximate true concurrent actuator outcomes.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `z3` with `static-link-z3` requires `cmake`; if the environment lacks it, keep solver usage feature-gated and ensure default checks run without optional native toolchain dependencies.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Safety checker returns `SafetyReport { level, explored_depth, warnings }`, which future verification orchestration (US-017) can surface directly in aggregated CLI verification output.
 ---
