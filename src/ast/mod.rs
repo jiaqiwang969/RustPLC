@@ -130,13 +130,19 @@ pub struct TasksSection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskDeclaration {
+    #[serde(default)]
+    pub line: usize,
     pub name: String,
     pub steps: Vec<StepDeclaration>,
+    #[serde(default)]
+    pub on_complete_line: Option<usize>,
     pub on_complete: Option<OnCompleteDirective>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepDeclaration {
+    #[serde(default)]
+    pub line: usize,
     pub name: String,
     pub statements: Vec<StepStatement>,
 }
@@ -205,6 +211,8 @@ pub struct TimeoutDirective {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GotoDirective {
+    #[serde(default)]
+    pub line: usize,
     pub step: String,
 }
 

@@ -349,20 +349,26 @@ fn parse_task_declaration(pair: Pair<Rule>) -> Result<TaskDeclaration, PlcError>
     let line = line_of(&pair);
     let mut name = None;
     let mut steps = Vec::new();
+    let mut on_complete_line = None;
     let mut on_complete = None;
 
     for part in pair.into_inner() {
         match part.as_rule() {
             Rule::identifier => name = Some(part.as_str().to_string()),
             Rule::step_declaration => steps.push(parse_step_declaration(part)?),
-            Rule::on_complete_statement => on_complete = Some(parse_on_complete_statement(part)?),
+            Rule::on_complete_statement => {
+                on_complete_line = Some(line_of(&part));
+                on_complete = Some(parse_on_complete_statement(part)?);
+            }
             _ => {}
         }
     }
 
     Ok(TaskDeclaration {
+        line,
         name: name.ok_or_else(|| PlcError::parse(line, "task 声明缺少名称"))?,
         steps,
+        on_complete_line,
         on_complete,
     })
 }
@@ -381,6 +387,7 @@ fn parse_step_declaration(pair: Pair<Rule>) -> Result<StepDeclaration, PlcError>
     }
 
     Ok(StepDeclaration {
+        line,
         name: name.ok_or_else(|| PlcError::parse(line, "step 声明缺少名称"))?,
         statements,
     })
@@ -564,7 +571,7 @@ fn parse_goto_statement(pair: Pair<Rule>) -> Result<GotoDirective, PlcError> {
         .as_str()
         .to_string();
 
-    Ok(GotoDirective { step })
+    Ok(GotoDirective { line, step })
 }
 
 fn parse_parallel_block(pair: Pair<Rule>) -> Result<ParallelBlock, PlcError> {
