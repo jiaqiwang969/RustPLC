@@ -15,6 +15,7 @@
 - Use `PlcError` constructors (`undefined_reference` / `type_mismatch` / `duplicate_definition`) so diagnostics share unified ERROR blocks with `位置/原因/建议` fields.
 - For end-to-end compilation paths (CLI/tests), run all four semantic builders and aggregate their errors so users get complete diagnostics in one run.
 - For causality verification, augment TopologyGraph with logical edges from `detects.device -> sensor` before running reachability, otherwise output-to-sensor chains may appear disconnected.
+- Liveness checks should combine AST metadata (`allow_indefinite_wait`, `on_complete`) with StateMachine transitions; IR guards alone cannot reconstruct all wait exemptions.
 Started: Wed Feb 11 01:14:39 CST 2026
 ---
 ## [2026-02-11 01:19:50 CST] - US-001
@@ -258,4 +259,22 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - Timing scope diagnostics need AST line metadata from `program.constraints.timing[index].line`; IR `TimingRule` currently does not carry source line numbers.
   - Useful context (e.g., "the evaluation panel is in component X")
     - Timing verifier APIs currently accept both semantic IR and the original AST program so error reports can preserve source-location precision.
+---
+
+## [2026-02-11 12:34:08 CST] - US-015
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Added `src/verification/liveness.rs` with `verify_liveness`, implementing deadlock-focused checks for missing wait escape paths, invalid `on_complete: unreachable`, non-terminal zero out-degree states, and SCC loops lacking timeout/allow-indefinite exits.
+  - Introduced Chinese liveness diagnostics that follow PRD 3.2.2 style (`ERROR [liveness]` + `位置/原因/物理分析/建议`) with line-numbered reporting.
+  - Added six liveness unit tests covering PRD 5.5.1-5.5.3 passing flow, missing-timeout failure, legal `on_complete: goto` loops, invalid `on_complete: unreachable`, SCC risk detection, and valid race+unreachable patterns.
+  - Exposed the new verifier through `src/verification/mod.rs`.
+- Files changed
+  - `src/verification/liveness.rs`, `src/verification/mod.rs`, `prd.json`, `progress.txt`, `.ralph_logs/iter_15.log`, `.ralph_logs/iter_16.log`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Liveness validation needs both AST context and IR transitions because `allow_indefinite_wait` is not encoded as a dedicated transition guard.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `on_complete: unreachable` cannot be validated from transition counts alone; you must analyze whether the final step still has non-jump control-flow paths.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - Current line mapping for synthetic parallel/race states reuses the parent step line by splitting synthetic names at `__`, which keeps diagnostics stable for nested control-flow checks.
 ---
