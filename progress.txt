@@ -1,5 +1,6 @@
 # Ralph Progress Log
 ## Codebase Patterns
+- TopologyGraph JSON 调试依赖 `petgraph` 的 `serde-1` feature；若缺失会导致 DiGraph 无法序列化。
 - In parser-to-AST lowering, unwrap wrapper PEG rules (e.g., `constraint_declaration`, `step_statement`) before matching concrete rule kinds, or valid nodes can be silently skipped.
 - Keep public module declarations centralized in `src/lib.rs`; implementation files live at `src/<module>/mod.rs`.
 - For early story scaffolding, keep module placeholders compiling so CLI and library can evolve incrementally without breaking builds.
@@ -105,4 +106,22 @@ Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
     - `Pair::into_inner()` consumes the pair; preserve `pair.as_str()` beforehand when fallback logic needs original token text (e.g., `on_complete: unreachable`).
   - Useful context (e.g., "the evaluation panel is in component X")
     - Causality chains in current AST are stored as `Vec<StateReference>` using device names with empty `state`; downstream IR/semantic stories should normalize this to explicit device-chain representation.
+---
+## [2026-02-11 09:02:01 CST] - US-007
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+- What was implemented
+  - Replaced `src/ir/mod.rs` placeholder with concrete IR definitions for `TopologyGraph`, `StateMachine`, `ConstraintSet`, and `TimingModel`.
+  - Implemented `TopologyGraph` on top of `petgraph::DiGraph<Device, ConnectionType>` with helper APIs for adding devices and connections.
+  - Added typed state machine/constraint/timing structures plus `to_pretty_json` helper so IR objects can be serialized with `serde_json::to_string_pretty` for debugging.
+  - Added IR unit tests that verify graph node/edge behavior and pretty-JSON serialization/deserialization for all core IR models.
+  - Enabled `petgraph`'s `serde-1` feature in Cargo dependencies so graph serialization works.
+- Files changed
+  - `Cargo.toml`, `Cargo.lock`, `src/ir/mod.rs`, `prd.json`, `progress.txt`, `.ralph_logs/iter_6.log`, `.ralph_logs/iter_7.log`
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+    - Keep IR enums `snake_case` with serde tags to make debug JSON stable and easy to diff against DSL keywords.
+  - Gotchas encountered (e.g., "do not forget to update Z when changing W")
+    - `petgraph::DiGraph` serialization requires the crate feature `serde-1`; adding derives alone is not enough.
+  - Useful context (e.g., "the evaluation panel is in component X")
+    - `TimingModel` currently stores action timing intervals keyed by deterministic strings (`task.step.action.target`) for straightforward lookup in upcoming semantic stories.
 ---

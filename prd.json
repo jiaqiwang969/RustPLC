@@ -126,7 +126,7 @@
         "类型检查通过"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

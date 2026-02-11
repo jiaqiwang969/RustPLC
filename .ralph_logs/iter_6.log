@@ -6,8 +6,10 @@ provider: codex
 approval: never
 sandbox: danger-full-access
 reasoning effort: high
-reasoning summaries: auto
-session id: 019c4a27-982a-7280-83a7-56beaf22830f
+reasoning summar
+Ralph completed all tasks!
+Completed at iteration 1 of 1
+
 --------
 user
 # Ralph Agent Instructions
@@ -3654,3 +3656,240 @@ index 5c5b0db35db2022d3174f364eccbbe5185413b4d..103ab8e7fe217dc7aef2f4e08258cbf7
 
 thinking
 **Deciding final amend without further commands**
+exec
+/bin/bash -lc 'git add .ralph_logs/iter_6.log && git commit --amend --no-edit' in /mnt/e/personal_project/rust_plc succeeded in 192ms:
+[ralph/phase1-2-parser-and-verification ff04d9e] feat: [US-006] - [实现 AST 构建器（解析树转 AST）]
+ Date: Wed Feb 11 08:55:36 2026 +0800
+ 8 files changed, 5568 insertions(+), 11 deletions(-)
+ create mode 100644 .ralph_logs/iter_5.log
+ create mode 100644 .ralph_logs/iter_6.log
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 5c5b0db35db2022d3174f364eccbbe5185413b4d..103ab8e7fe217dc7aef2f4e08258cbf7392d5a23
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -181,10 +181,16 @@
+     let mut causality = Vec::new();
+ 
+     for item in pair.into_inner() {
+-        match item.as_rule() {
+-            Rule::safety_constraint => safety.push(parse_safety_constraint(item)?),
+-            Rule::timing_constraint => timing.push(parse_timing_constraint(item)?),
+-            Rule::causality_constraint => causality.push(parse_causality_constraint(item)?),
++        if item.as_rule() != Rule::constraint_declaration {
++            continue;
++        }
++
++        let line = line_of(&item);
++        let constraint = first_inner(item, line, "约束声明")?;
++        match constraint.as_rule() {
++            Rule::safety_constraint => safety.push(parse_safety_constraint(constraint)?),
++            Rule::timing_constraint => timing.push(parse_timing_constraint(constraint)?),
++            Rule::causality_constraint => causality.push(parse_causality_constraint(constraint)?),
+             _ => {}
+         }
+     }
+@@ -658,11 +664,12 @@
+ 
+ fn parse_on_complete_statement(pair: Pair<Rule>) -> Result<OnCompleteDirective, PlcError> {
+     let line = line_of(&pair);
++    let raw = pair.as_str().to_string();
+     if let Some(part) = pair.into_inner().next() {
+         let goto = parse_goto_statement(part)?;
+         Ok(OnCompleteDirective::Goto { step: goto.step })
+     } else {
+-        if pair.as_str().contains("unreachable") {
++        if raw.contains("unreachable") {
+             Ok(OnCompleteDirective::Unreachable)
+         } else {
+             Err(PlcError::parse(
+@@ -818,7 +825,11 @@
+     }
+ }
+ 
+-fn first_inner(pair: Pair<Rule>, line: usize, context: &str) -> Result<Pair<Rule>, PlcError> {
++fn first_inner<'a>(
++    pair: Pair<'a, Rule>,
++    line: usize,
++    context: &str,
++) -> Result<Pair<'a, Rule>, PlcError> {
+     pair.into_inner()
+         .next()
+         .ok_or_else(|| PlcError::parse(line, format!("{context} 缺少内部结构")))
+
+
+thinking
+**Executing update plan without shell**
+Plan update
+  ✓ Inspect PRD and progress log (including Codebase Patterns), then verify git branch matches PRD
+  ✓ Implement highest-priority failing story with focused code changes
+  ✓ Run quality checks, update PRD/progress log, and commit with required message
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 5c5b0db35db2022d3174f364eccbbe5185413b4d..103ab8e7fe217dc7aef2f4e08258cbf7392d5a23
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -181,10 +181,16 @@
+     let mut causality = Vec::new();
+ 
+     for item in pair.into_inner() {
+-        match item.as_rule() {
+-            Rule::safety_constraint => safety.push(parse_safety_constraint(item)?),
+-            Rule::timing_constraint => timing.push(parse_timing_constraint(item)?),
+-            Rule::causality_constraint => causality.push(parse_causality_constraint(item)?),
++        if item.as_rule() != Rule::constraint_declaration {
++            continue;
++        }
++
++        let line = line_of(&item);
++        let constraint = first_inner(item, line, "约束声明")?;
++        match constraint.as_rule() {
++            Rule::safety_constraint => safety.push(parse_safety_constraint(constraint)?),
++            Rule::timing_constraint => timing.push(parse_timing_constraint(constraint)?),
++            Rule::causality_constraint => causality.push(parse_causality_constraint(constraint)?),
+             _ => {}
+         }
+     }
+@@ -658,11 +664,12 @@
+ 
+ fn parse_on_complete_statement(pair: Pair<Rule>) -> Result<OnCompleteDirective, PlcError> {
+     let line = line_of(&pair);
++    let raw = pair.as_str().to_string();
+     if let Some(part) = pair.into_inner().next() {
+         let goto = parse_goto_statement(part)?;
+         Ok(OnCompleteDirective::Goto { step: goto.step })
+     } else {
+-        if pair.as_str().contains("unreachable") {
++        if raw.contains("unreachable") {
+             Ok(OnCompleteDirective::Unreachable)
+         } else {
+             Err(PlcError::parse(
+@@ -818,7 +825,11 @@
+     }
+ }
+ 
+-fn first_inner(pair: Pair<Rule>, line: usize, context: &str) -> Result<Pair<Rule>, PlcError> {
++fn first_inner<'a>(
++    pair: Pair<'a, Rule>,
++    line: usize,
++    context: &str,
++) -> Result<Pair<'a, Rule>, PlcError> {
+     pair.into_inner()
+         .next()
+         .ok_or_else(|| PlcError::parse(line, format!("{context} 缺少内部结构")))
+
+
+thinking
+**Preparing final report structure**
+codex
+Implemented the highest-priority failing story **US-006** on branch `ralph/phase1-2-parser-and-verification` and committed it.
+
+- Added full parser-to-AST entrypoint `parse_plc(input: &str) -> Result<PlcProgram, PlcError>` so the full DSL (`[topology]`, `[constraints]`, `[tasks]`) now lowers into typed AST instead of syntax-only parsing (`src/parser/mod.rs:1`).
+- Implemented detailed lowering helpers for:
+  - topology devices/attributes
+  - safety/timing/causality constraints
+  - tasks/steps/statements (`action`, `wait`, `timeout`, `goto`, `parallel`, `race`, `allow_indefinite_wait`, `on_complete`)
+  - line-numbered Chinese parse errors via `PlcError` mapping (`src/parser/mod.rs:1`, `src/error/mod.rs:1`).
+- Extended grammar to expose explicit parse nodes needed for AST lowering (`binary_output_value`, `comparison_operator`) while keeping existing section parsers intact (`src/parser/plc.pest:1`).
+- Added/updated tests:
+  - existing section grammar tests still pass
+  - new full-program AST tests for PRD 6.3 and PRD 9 examples
+  - syntax-error line-number regression test (`src/parser/mod.rs:915`).
+- Updated PRD story status: `US-006` now `passes: true` (`prd.json:1`).
+- Updated progress log:
+  - appended US-006 execution entry
+  - added a reusable Codebase Pattern about unwrapping wrapper PEG rules before dispatch (`progress.txt:1`).
+- Checked for nearby `AGENTS.md` to update; none exists in this repository tree, so no AGENTS file changes were made.
+
+Quality checks run:
+- `cargo test` ✅
+- `cargo check` ✅
+
+Commit:
+- `ff04d9e`
+- Message: `feat: [US-006] - [实现 AST 构建器（解析树转 AST）]`
+
+
+file update:
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 5c5b0db35db2022d3174f364eccbbe5185413b4d..103ab8e7fe217dc7aef2f4e08258cbf7392d5a23
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -181,10 +181,16 @@
+     let mut causality = Vec::new();
+ 
+     for item in pair.into_inner() {
+-        match item.as_rule() {
+-            Rule::safety_constraint => safety.push(parse_safety_constraint(item)?),
+-            Rule::timing_constraint => timing.push(parse_timing_constraint(item)?),
+-            Rule::causality_constraint => causality.push(parse_causality_constraint(item)?),
++        if item.as_rule() != Rule::constraint_declaration {
++            continue;
++        }
++
++        let line = line_of(&item);
++        let constraint = first_inner(item, line, "约束声明")?;
++        match constraint.as_rule() {
++            Rule::safety_constraint => safety.push(parse_safety_constraint(constraint)?),
++            Rule::timing_constraint => timing.push(parse_timing_constraint(constraint)?),
++            Rule::causality_constraint => causality.push(parse_causality_constraint(constraint)?),
+             _ => {}
+         }
+     }
+@@ -658,11 +664,12 @@
+ 
+ fn parse_on_complete_statement(pair: Pair<Rule>) -> Result<OnCompleteDirective, PlcError> {
+     let line = line_of(&pair);
++    let raw = pair.as_str().to_string();
+     if let Some(part) = pair.into_inner().next() {
+         let goto = parse_goto_statement(part)?;
+         Ok(OnCompleteDirective::Goto { step: goto.step })
+     } else {
+-        if pair.as_str().contains("unreachable") {
++        if raw.contains("unreachable") {
+             Ok(OnCompleteDirective::Unreachable)
+         } else {
+             Err(PlcError::parse(
+@@ -818,7 +825,11 @@
+     }
+ }
+ 
+-fn first_inner(pair: Pair<Rule>, line: usize, context: &str) -> Result<Pair<Rule>, PlcError> {
++fn first_inner<'a>(
++    pair: Pair<'a, Rule>,
++    line: usize,
++    context: &str,
++) -> Result<Pair<'a, Rule>, PlcError> {
+     pair.into_inner()
+         .next()
+         .ok_or_else(|| PlcError::parse(line, format!("{context} 缺少内部结构")))
+
+tokens used
+1,438,896
+Implemented the highest-priority failing story **US-006** on branch `ralph/phase1-2-parser-and-verification` and committed it.
+
+- Added full parser-to-AST entrypoint `parse_plc(input: &str) -> Result<PlcProgram, PlcError>` so the full DSL (`[topology]`, `[constraints]`, `[tasks]`) now lowers into typed AST instead of syntax-only parsing (`src/parser/mod.rs:1`).
+- Implemented detailed lowering helpers for:
+  - topology devices/attributes
+  - safety/timing/causality constraints
+  - tasks/steps/statements (`action`, `wait`, `timeout`, `goto`, `parallel`, `race`, `allow_indefinite_wait`, `on_complete`)
+  - line-numbered Chinese parse errors via `PlcError` mapping (`src/parser/mod.rs:1`, `src/error/mod.rs:1`).
+- Extended grammar to expose explicit parse nodes needed for AST lowering (`binary_output_value`, `comparison_operator`) while keeping existing section parsers intact (`src/parser/plc.pest:1`).
+- Added/updated tests:
+  - existing section grammar tests still pass
+  - new full-program AST tests for PRD 6.3 and PRD 9 examples
+  - syntax-error line-number regression test (`src/parser/mod.rs:915`).
+- Updated PRD story status: `US-006` now `passes: true` (`prd.json:1`).
+- Updated progress log:
+  - appended US-006 execution entry
+  - added a reusable Codebase Pattern about unwrapping wrapper PEG rules before dispatch (`progress.txt:1`).
+- Checked for nearby `AGENTS.md` to update; none exists in this repository tree, so no AGENTS file changes were made.
+
+Quality checks run:
+- `cargo test` ✅
+- `cargo check` ✅
+
+Commit:
+- `ff04d9e`
+- Message: `feat: [US-006] - [实现 AST 构建器（解析树转 AST）]`
+
