@@ -1,0 +1,8 @@
+[package]
+name = "rustplc_codegen"
+version = "0.1.0"
+edition = "2024"
+description = "BC2 Execution Domain — IR → Rust source code generation"
+
+[dependencies]
+rustplc_ir = { path = "../rustplc_ir" }

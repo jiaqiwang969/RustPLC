@@ -1,7 +1,7 @@
-mod expression;
-mod state_machine;
+pub mod expression;
+pub mod state_machine;
 
-use crate::ir::{StateMachine, TimingModel, TopologyGraph};
+use rustplc_ir::{StateMachine, TimingModel, TopologyGraph};
 use std::fmt::Write;
 use std::path::Path;
 

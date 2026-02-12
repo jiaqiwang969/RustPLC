@@ -1,11 +1,11 @@
-use crate::ir::{
+use rustplc_ir::{
     BinaryValue, StateMachine, State, Transition, TransitionAction, TransitionGuard,
     TimerOperationKind,
 };
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use super::expression;
+use crate::expression;
 
 /// Convert "task_name.step_name" to PascalCase enum variant name.
 fn state_to_variant(state: &State) -> String {
@@ -216,7 +216,7 @@ fn emit_one_action(out: &mut String, action: &TransitionAction, indent: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{State, StateMachine, Transition, TransitionGuard, TransitionAction};
+    use rustplc_ir::{State, StateMachine, Transition, TransitionGuard, TransitionAction};
 
     fn simple_sm() -> StateMachine {
         StateMachine {

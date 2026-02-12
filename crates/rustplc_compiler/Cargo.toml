@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 rustplc_ir = { path = "../rustplc_ir" }
+rustplc_codegen = { path = "../rustplc_codegen" }
 pest = "2.7"
 pest_derive = "2.7"
 petgraph = { version = "0.6", features = ["serde-1"] }
