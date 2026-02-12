@@ -73,7 +73,7 @@ Rust binary (状态机 + HAL trait)
 │  BC2: 执行域 (Execution Domain)                                  │
 │  职责: IR → Rust 状态机 + 扫描周期引擎                            │
 │  输出: 可执行 binary (PlcState enum + scan_cycle fn)             │
-│  crate: rustplc_runtime, rustplc_compiler/codegen                │
+│  crate: rustplc_codegen, rustplc_runtime                         │
 │                                                                 │
 │  上游: BC1 (消费 IR)                                             │
 │  下游: BC3 (通过 HalBackend trait 解耦)                          │
@@ -124,7 +124,7 @@ Rust binary (状态机 + HAL trait)
 
 | 上游 → 下游 | 集成模式 | 契约 |
 |-------------|---------|------|
-| BC1 → BC2 | 共享内核 (Shared Kernel) | `IR` 数据结构 (StateMachine, TopologyGraph) |
+| BC1 → BC2 | 共享内核 (Shared Kernel) | `rustplc_ir` crate (StateMachine, TopologyGraph) |
 | BC2 → BC3 | 依赖倒置 (Dependency Inversion) | `HalBackend` trait |
 | BC3 → BC4 | 发布语言 (Published Language) | Modbus RTU/TCP 协议帧 |
 | BC3 → BC5 | 发布语言 (Published Language) | Modbus RTU 协议帧 |
@@ -138,7 +138,9 @@ BC4 和 BC5 都是闭环的下半段——它们接收控制指令，经过仿�
 ```
 RustPLC/
 ├── crates/
-│   ├── rustplc_compiler/       # BC1: 解析 → AST → IR → 验证 → 代码生成
+│   ├── rustplc_compiler/       # BC1: 解析 → AST → IR → 验证
+│   ├── rustplc_ir/             # 共享内核: IR 数据结构 (BC1↔BC2)
+│   ├── rustplc_codegen/        # BC2: IR → Rust 状态机代码生成
 │   ├── rustplc_runtime/        # BC2: 扫描周期引擎 + 定时器组
 │   ├── rustplc_hal/            # BC3: HalBackend trait + SimBackend + 配置
 │   ├── rustplc_modbus/         # BC3: [stub] Modbus RTU/TCP 后端
