@@ -8,4 +8,8 @@ description = "Modbus RTU/TCP backend for RustPLC HAL"
 rustplc_hal = { path = "../rustplc_hal" }
 log = "0.4"
 thiserror = "1"
-# tokio-modbus = "0.14"  # uncomment when implementing
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync"] }
+tokio-modbus = "0.17"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
