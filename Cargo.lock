@@ -635,6 +635,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "rustplc_hal",
+ "rustplc_modbus",
  "rustplc_runtime",
  "serde",
  "thiserror 1.0.69",

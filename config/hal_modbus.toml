@@ -1,15 +1,12 @@
-# Modbus RTU/TCP 配置
-# 虚拟工厂模式（Mode B）或实体硬件模式
+# Modbus RTU 配置
+# 实体硬件模式 — 串口连接
 
 [mode]
 type = "modbus_rtu"
 
 [modbus]
-port = "/dev/ttyUSB0"   # 串口设备（RTU 模式）
+serial_port = "/dev/ttyUSB0"
 baud_rate = 9600
-data_bits = 8
-stop_bits = 1
-parity = "none"
 slave_id = 1
 timeout_ms = 1000
 
@@ -19,7 +16,6 @@ max_cycles = 0
 
 # 设备映射：PLC 设备名 → Modbus 地址
 [mapping.coils]
-# device_name = address
 # valve_extend = 0
 # valve_retract = 1
 
@@ -32,6 +28,3 @@ max_cycles = 0
 
 [mapping.input_registers]
 # temperature = 0
-
-[logging]
-level = "info"

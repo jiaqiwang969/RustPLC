@@ -6,6 +6,7 @@ description = "Digital twin orchestrator — coordinates all execution modes"
 
 [dependencies]
 rustplc_hal = { path = "../rustplc_hal" }
+rustplc_modbus = { path = "../rustplc_modbus" }
 rustplc_runtime = { path = "../rustplc_runtime" }
 log = "0.4"
 thiserror = "1"

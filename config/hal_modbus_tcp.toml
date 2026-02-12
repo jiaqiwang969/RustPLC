@@ -1,0 +1,24 @@
+# Modbus TCP 配置
+# 虚拟工厂模式（Mode B）— ESXi VM 内 Modbus TCP slave
+
+[mode]
+type = "modbus_tcp"
+
+[modbus]
+host = "192.168.100.20"
+port = 502
+slave_id = 1
+timeout_ms = 1000
+
+[runtime]
+cycle_time_ms = 50
+max_cycles = 0
+
+# 设备映射：PLC 设备名 → Modbus 地址
+[mapping.coils]
+valve_extend = 0
+valve_retract = 1
+
+[mapping.discrete_inputs]
+sensor_home = 0
+sensor_end = 1
