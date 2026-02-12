@@ -1,0 +1,13 @@
+[package]
+name = "rustplc_orchestrator"
+version = "0.1.0"
+edition = "2024"
+description = "Digital twin orchestrator — coordinates all execution modes"
+
+[dependencies]
+rustplc_hal = { path = "../rustplc_hal" }
+rustplc_runtime = { path = "../rustplc_runtime" }
+log = "0.4"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"

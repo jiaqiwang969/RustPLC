@@ -1,0 +1,1239 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{xeCJK}
+\usepackage{fontspec}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{fancyvrb}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+\setCJKmainfont{STSong}
+\setCJKsansfont{STHeiti}
+\setCJKmonofont{STFangsong}
+\setmainfont{Times New Roman}
+\setmonofont{Menlo}
+
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{keyword}{RGB}{0,0,180}
+\definecolor{comment}{RGB}{0,128,0}
+\definecolor{string}{RGB}{163,21,21}
+\definecolor{section}{RGB}{180,0,0}
+
+\lstdefinelanguage{PLC}{
+  keywords={device,action,wait,timeout,goto,step,task,on_complete,parallel,race,branch,then,allow_indefinite_wait,reason,safety,timing,causality},
+  keywordstyle=\color{keyword}\bfseries,
+  morecomment=[l]{\#},
+  commentstyle=\color{comment}\itshape,
+  morestring=[b]",
+  stringstyle=\color{string},
+  literate={->}{{\textcolor{red}{->}}}{2}
+           {[topology]}{{\textcolor{section}{\textbf{[topology]}}}}{10}
+           {[constraints]}{{\textcolor{section}{\textbf{[constraints]}}}}{13}
+           {[tasks]}{{\textcolor{section}{\textbf{[tasks]}}}}{7},
+  sensitive=true,
+}
+
+\lstset{
+  basicstyle=\small\ttfamily,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=4,
+  showstringspaces=false,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=8pt,
+  xleftmargin=2em,
+  framexleftmargin=1.5em,
+}
+
+\title{\textbf{RustPLC：基于形式化验证的工业控制编译器} \\[0.5em]
+\large 第一性原理分析与实例演练}
+\author{RustPLC 项目学习笔记}
+\date{2026年2月}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+\section{引言：为什么需要 RustPLC}
+
+传统 PLC（可编程逻辑控制器）编程使用梯形图、结构化文本（ST）或功能块图（FBD），
+程序员手动编写控制逻辑，然后通过测试来验证正确性。这种``先写后测''的模式存在根本性缺陷：
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{测试只能发现 bug，不能证明没有 bug}——测试覆盖的是有限路径，而工业系统的状态空间是指数级的。
+  \item \textbf{安全约束散落在代码各处}——互锁逻辑与业务逻辑混杂，难以审计。
+  \item \textbf{时序问题难以复现}——传感器延迟、气缸行程时间等物理参数在仿真中容易被忽略。
+\end{itemize}
+
+RustPLC 的核心主张是：
+
+\begin{quote}
+\textit{不要编写控制程序——声明物理事实和安全意图，让编译器在代码运行之前证明它是安全的。}
+\end{quote}
+
+%% ============================================================
+\section{第一性原理}
+
+RustPLC 的设计建立在以下不可再分的基本原理之上：
+
+\subsection{原理一：物理系统是有限状态的}
+
+工业控制中的每个设备都有有限的状态集合。气缸只有``伸出''和``缩回''两个状态，
+电磁阀只有``开''和``关''，传感器只有``检测到''和``未检测到''。
+整个系统的状态空间是所有设备状态的笛卡尔积：
+
+\[
+\mathcal{S} = S_{\text{dev}_1} \times S_{\text{dev}_2} \times \cdots \times S_{\text{dev}_n} \times S_{\text{ctrl}}
+\]
+
+其中 $S_{\text{ctrl}}$ 是控制状态机的状态集。由于每个因子都是有限的，
+$\mathcal{S}$ 也是有限的——这意味着我们可以用穷举或归纳的方式证明性质。
+
+\subsection{原理二：安全性是状态空间上的不变量}
+
+``A缸和B缸不能同时伸出''这样的安全约束，本质上是对状态空间的一个划分：
+
+\[
+\mathcal{S}_{\text{safe}} = \{ s \in \mathcal{S} \mid \neg(\text{cyl\_A.extended} \wedge \text{cyl\_B.extended}) \}
+\]
+
+安全验证的任务就是证明：从初始状态出发，沿任意合法转移路径，系统永远停留在 $\mathcal{S}_{\text{safe}}$ 中。
+这是一个经典的\textbf{模型检验}（Model Checking）问题。
+
+\subsection{原理三：因果律决定信号传播路径}
+
+物理信号不能凭空出现。一个传感器要检测到气缸伸出，必须存在完整的因果链：
+
+\[
+\text{数字输出} \xrightarrow{\text{电气}} \text{电磁阀} \xrightarrow{\text{气动}} \text{气缸} \xrightarrow{\text{物理}} \text{传感器}
+\]
+
+如果拓扑图中这条路径断开，程序逻辑再正确也无法工作。
+
+\subsection{原理四：活性保证系统不会``卡死''}
+
+一个安全但永远不动的系统没有价值。活性（Liveness）要求每个非终态都有出路：
+要么有超时跳转，要么有明确的``允许无限等待''标记（如等待人工按钮）。
+
+\subsection{原理五：时序约束来自物理定律}
+
+电磁阀有响应时间，气缸有行程时间，电机有加速斜坡。这些不是软件参数，
+而是物理常数。编译器必须沿拓扑连接链累加这些时间，计算最坏情况关键路径，
+并与声明的时序约束比较。
+
+%% ============================================================
+\section{编译器架构}
+
+RustPLC 采用经典的多阶段编译器设计，如图~\ref{fig:pipeline} 所示。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  stage/.style={rectangle, draw, rounded corners, minimum width=3.5cm, minimum height=1cm,
+                fill=blue!8, font=\small\bfseries},
+  data/.style={rectangle, draw, dashed, minimum width=3cm, minimum height=0.7cm,
+               fill=yellow!10, font=\small},
+  arr/.style={-{Stealth[length=3mm]}, thick},
+  node distance=1.2cm
+]
+  \node[stage] (src) {.plc 源文件};
+  \node[stage, below=of src] (parse) {解析器 (pest PEG)};
+  \node[data, right=2cm of parse] (ast) {AST};
+  \node[stage, below=of parse] (sem) {语义分析};
+  \node[data, right=2cm of sem] (ir) {IR 中间表示};
+  \node[stage, below=of sem] (ver) {形式化验证引擎};
+  \node[data, right=2cm of ver] (report) {验证报告};
+  \node[stage, below=of ver] (out) {JSON 输出};
+
+  \draw[arr] (src) -- (parse);
+  \draw[arr] (parse) -- (sem);
+  \draw[arr] (parse) -- (ast);
+  \draw[arr] (sem) -- (ver);
+  \draw[arr] (sem) -- (ir);
+  \draw[arr] (ver) -- (out);
+  \draw[arr] (ver) -- (report);
+\end{tikzpicture}
+\caption{RustPLC 编译流水线}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{阶段一：解析（Parser）}
+
+使用 \texttt{pest} PEG 解析器，将 \texttt{.plc} 源文件转换为抽象语法树（AST）。
+语法文件 \texttt{plc.pest} 定义了 150 条规则，覆盖三大段落：
+
+\begin{itemize}
+  \item \texttt{[topology]}——设备声明与物理连接
+  \item \texttt{[constraints]}——安全/时序/因果约束
+  \item \texttt{[tasks]}——控制任务与步骤（状态机）
+\end{itemize}
+
+\subsection{阶段二：语义分析（Semantic Analysis）}
+
+将 AST 降低为四种中间表示：
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{IR 结构} & \textbf{数据结构} & \textbf{用途} \\
+\midrule
+拓扑图 & \texttt{petgraph::DiGraph} & 设备连接关系 \\
+状态机 & 状态 + 转移 + 守卫 & 控制流建模 \\
+约束集 & 安全/时序/因果规则 & 验证目标 \\
+时序模型 & 动作$\to$时间区间映射 & 时序分析 \\
+\bottomrule
+\end{tabular}
+\caption{四种中间表示}
+\end{table}
+
+\subsection{阶段三：形式化验证}
+
+四个独立的验证引擎并行运行：
+
+\begin{enumerate}
+  \item \textbf{安全检查器}——有界模型检验（BMC）+ $k$-归纳，可选 Z3 SMT 求解器
+  \item \textbf{活性检查器}——强连通分量（SCC）分析 + 死锁检测
+  \item \textbf{时序检查器}——最坏情况关键路径分析
+  \item \textbf{因果检查器}——拓扑图 BFS 可达性验证
+\end{enumerate}
+
+%% ============================================================
+\section{DSL 语言设计}
+
+每个 \texttt{.plc} 文件由三个段落组成。下面以``传送带冲压系统''为例逐段讲解。
+
+\subsection{拓扑段 \texttt{[topology]}}
+
+声明物理设备及其连接关系：
+
+\begin{lstlisting}[language=PLC]
+[topology]
+
+device Y0: digital_output
+device Y1: digital_output
+device X0: digital_input
+device X1: digital_input
+device X2: digital_input
+device X3: digital_input
+
+device start_button: digital_input {
+    connected_to: X3
+    debounce: 20ms
+}
+
+device conveyor_motor: motor {
+    connected_to: Y0
+    rated_speed: 30rpm
+    ramp_time: 100ms
+}
+
+device stamp_valve: solenoid_valve {
+    connected_to: Y1
+    response_time: 15ms
+}
+
+device stamp_head: cylinder {
+    connected_to: stamp_valve
+    stroke_time: 250ms
+    retract_time: 200ms
+}
+
+device sensor_in_position: sensor {
+    type: proximity
+    connected_to: X0
+    detects: conveyor_motor.position_A
+}
+
+device sensor_stamp_down: sensor {
+    type: magnetic
+    connected_to: X1
+    detects: stamp_head.extended
+}
+
+device sensor_stamp_up: sensor {
+    type: magnetic
+    connected_to: X2
+    detects: stamp_head.retracted
+}
+\end{lstlisting}
+
+\texttt{connected\_to} 表示上游连接：\texttt{stamp\_head} 连接到 \texttt{stamp\_valve}，
+意味着电磁阀驱动气缸。编译器据此构建有向拓扑图。
+
+\subsection{约束段 \texttt{[constraints]}}
+
+声明安全、时序和因果约束：
+
+\begin{lstlisting}[language=PLC]
+[constraints]
+
+safety: stamp_head.extended conflicts_with conveyor_motor.on
+    reason: "冲压头下压时传送带不能运行"
+
+timing: task.cycle must_complete_within 3000ms
+    reason: "单个冲压周期不应超过3秒"
+
+causality: Y1 -> stamp_valve -> stamp_head -> sensor_stamp_down
+causality: Y1 -> stamp_valve -> stamp_head -> sensor_stamp_up
+\end{lstlisting}
+
+\begin{itemize}
+  \item \textbf{safety}：\texttt{conflicts\_with} 表示两个状态互斥，\texttt{requires} 表示蕴含。
+  \item \textbf{timing}：\texttt{must\_complete\_within} 设定上界，\texttt{must\_start\_after} 设定下界。
+  \item \textbf{causality}：用 \texttt{->} 链声明信号传播路径。
+\end{itemize}
+
+\subsection{任务段 \texttt{[tasks]}}
+
+定义控制逻辑为状态机：
+
+\begin{lstlisting}[language=PLC]
+[tasks]
+
+task cycle:
+    step feed:
+        action: set conveyor_motor on
+        wait: sensor_in_position == true
+        timeout: 1500ms -> goto fault_handler
+    step stop_belt:
+        action: set conveyor_motor off
+    step press_down:
+        action: extend stamp_head
+        wait: sensor_stamp_down == true
+        timeout: 500ms -> goto fault_handler
+    step press_up:
+        action: retract stamp_head
+        wait: sensor_stamp_up == true
+        timeout: 500ms -> goto fault_handler
+    on_complete: goto ready
+
+task fault_handler:
+    step emergency:
+        action: retract stamp_head
+        action: set conveyor_motor off
+    step report:
+        action: log "冲压系统故障：动作超时"
+    on_complete: goto ready
+
+task ready:
+    step wait_start:
+        wait: start_button == true
+        allow_indefinite_wait: true
+    on_complete: goto cycle
+\end{lstlisting}
+
+%% ============================================================
+\section{验证引擎详解}
+
+\subsection{安全检查器：有界模型检验}
+
+安全检查器的核心算法是\textbf{有界模型检验}（Bounded Model Checking, BMC），
+辅以 $k$-\textbf{归纳}（$k$-induction）来获得完备证明。
+
+\subsubsection{状态空间建模}
+
+系统的具体状态是一个元组：
+\[
+\sigma = (q, d_1, d_2, \ldots, d_n)
+\]
+其中 $q \in Q$ 是控制状态机的当前状态，$d_i \in D_i$ 是第 $i$ 个设备的当前状态。
+
+\subsubsection{BMC 搜索}
+
+从初始状态 $\sigma_0$ 出发，BFS 展开所有可达状态，直到深度 $k$：
+
+\[
+\text{Reach}_k = \{ \sigma \mid \exists \sigma_0 \xrightarrow{t_1} \sigma_1 \xrightarrow{t_2} \cdots \xrightarrow{t_k} \sigma, \; \sigma_0 \in \mathcal{I} \}
+\]
+
+对每个 \texttt{conflicts\_with} 约束 $\phi$，检查：
+\[
+\forall \sigma \in \text{Reach}_k : \sigma \models \neg\phi
+\]
+
+\subsubsection{$k$-归纳}
+
+如果 BFS 在深度 $k$ 时状态空间已收敛（无新状态），则获得\textbf{完备证明}：
+\[
+\text{Reach}_k = \text{Reach}_{k+1} \implies \text{Reach}_k = \text{Reach}_\infty
+\]
+
+在我们的传送带冲压示例中，安全检查器在深度 8 获得完备证明，
+证明了``冲压头下压时传送带不会运行''这一安全性质。
+
+\subsection{活性检查器：死锁检测}
+
+活性检查器执行四项检查：
+
+\begin{enumerate}
+  \item \textbf{无超时等待}：每个 \texttt{wait} 必须有 \texttt{timeout} 或 \texttt{allow\_indefinite\_wait}。
+  \item \textbf{不可达声明验证}：标记为 \texttt{unreachable} 的 \texttt{on\_complete} 必须所有路径都跳走。
+  \item \textbf{零出度检测}：非终态必须有出边。
+  \item \textbf{SCC 分析}：使用 Kosaraju 算法检测可能困住执行的环路。
+\end{enumerate}
+
+\subsection{时序检查器：关键路径分析}
+
+时序检查器沿拓扑连接链累加设备物理参数，计算最坏情况执行时间。
+
+以冲压周期为例：
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llr}
+\toprule
+\textbf{步骤} & \textbf{关键动作} & \textbf{最坏时间} \\
+\midrule
+feed & 电机启动 + 等待到位 & 1500ms（超时上界） \\
+stop\_belt & 电机停止 & 100ms \\
+press\_down & 电磁阀响应 + 气缸行程 & 500ms（超时上界） \\
+press\_up & 气缸回程 & 500ms（超时上界） \\
+\midrule
+\textbf{总计} & & \textbf{2600ms} \\
+\bottomrule
+\end{tabular}
+\caption{冲压周期最坏情况时序分析}
+\end{table}
+
+$2600\text{ms} < 3000\text{ms}$，时序约束满足。
+
+\subsection{因果检查器：信号可达性}
+
+因果检查器在拓扑图上执行 BFS，验证声明的因果链中每一跳都有对应的物理连接：
+
+\[
+\text{Y1} \xrightarrow{\text{electrical}} \text{stamp\_valve} \xrightarrow{\text{pneumatic}} \text{stamp\_head} \xrightarrow{\text{logical}} \text{sensor\_stamp\_down}
+\]
+
+如果任何一跳断开（例如 \texttt{connected\_to} 配置错误），编译器会报告断裂位置并给出修复建议。
+
+%% ============================================================
+\section{完整示例：传送带冲压系统}
+
+\subsection{场景描述}
+
+一条自动化产线上，工件由传送带送入冲压工位。传感器检测到工件到位后，
+传送带停止，冲压头下压完成冲压，然后回位，传送带继续运行。
+
+关键安全约束：\textbf{冲压头下压时传送带绝对不能运行}，否则工件移位会导致冲压偏移，
+损坏模具甚至造成安全事故。
+
+\subsection{系统拓扑}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  dev/.style={rectangle, draw, rounded corners, minimum width=2.2cm, minimum height=0.8cm, font=\small},
+  io/.style={dev, fill=green!15},
+  act/.style={dev, fill=orange!15},
+  sen/.style={dev, fill=cyan!15},
+  conn/.style={-{Stealth[length=2.5mm]}, thick},
+  label/.style={font=\tiny, midway, above},
+  node distance=1.5cm and 2cm
+]
+  \node[io] (y0) {Y0};
+  \node[io, right=3cm of y0] (y1) {Y1};
+  \node[act, below=of y0] (motor) {conveyor\_motor};
+  \node[act, below=of y1] (valve) {stamp\_valve};
+  \node[act, below=of valve] (head) {stamp\_head};
+  \node[sen, below left=1.2cm and 0cm of motor] (spos) {sensor\_in\_position};
+  \node[sen, below left=1.2cm and -0.5cm of head] (sdown) {sensor\_stamp\_down};
+  \node[sen, below right=1.2cm and -0.5cm of head] (sup) {sensor\_stamp\_up};
+
+  \draw[conn] (y0) -- node[label] {电气} (motor);
+  \draw[conn] (y1) -- node[label] {电气} (valve);
+  \draw[conn] (valve) -- node[label,right] {气动} (head);
+  \draw[conn, dashed] (motor) -- node[label,left] {检测} (spos);
+  \draw[conn, dashed] (head) -- node[label,left] {检测} (sdown);
+  \draw[conn, dashed] (head) -- node[label,right] {检测} (sup);
+\end{tikzpicture}
+\caption{传送带冲压系统拓扑图}
+\label{fig:topo}
+\end{figure}
+
+\subsection{状态机}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  state/.style={rectangle, draw, rounded corners, minimum width=2cm, minimum height=0.7cm,
+                fill=blue!10, font=\small},
+  arr/.style={-{Stealth[length=2.5mm]}, thick},
+  timeout/.style={arr, dashed, red},
+  node distance=1.5cm
+]
+  \node[state] (feed) {cycle.feed};
+  \node[state, below=of feed] (stop) {cycle.stop\_belt};
+  \node[state, below=of stop] (down) {cycle.press\_down};
+  \node[state, below=of down] (up) {cycle.press\_up};
+  \node[state, right=3cm of feed] (fault) {fault\_handler};
+  \node[state, below=3cm of fault] (ready) {ready.wait\_start};
+
+  \draw[arr] (feed) -- node[left,font=\tiny] {到位} (stop);
+  \draw[arr] (stop) -- node[left,font=\tiny] {always} (down);
+  \draw[arr] (down) -- node[left,font=\tiny] {下压到位} (up);
+  \draw[arr] (up) -- node[left,font=\tiny] {回位到位} (ready);
+  \draw[timeout] (feed) -- node[above,font=\tiny] {1500ms} (fault);
+  \draw[timeout] (down.east) -- (fault);
+  \draw[timeout] (up.east) -- (fault);
+  \draw[arr] (fault) -- (ready);
+  \draw[arr] (ready.west) -- +(-1.5,0) |- (feed.west);
+\end{tikzpicture}
+\caption{传送带冲压系统状态机（红色虚线为超时跳转）}
+\label{fig:sm}
+\end{figure}
+
+\subsection{运行验证}
+
+在项目根目录执行：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+$ cargo run -- examples/conveyor_stamp.plc
+\end{Verbatim}
+
+输出：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+验证通过：
+  - Safety: 完备证明（深度 8）
+  - Liveness: 通过
+  - Timing: 通过
+  - Causality: 通过
+\end{Verbatim}
+
+四项验证全部通过，含义如下：
+
+\begin{itemize}
+  \item \textbf{Safety 完备证明}：在深度 8 的状态空间搜索中，状态已收敛。
+        数学上证明了在\textbf{任意}执行路径上，冲压头下压时传送带都不会运行。
+  \item \textbf{Liveness 通过}：所有等待都有超时保护或明确的无限等待许可，
+        不存在死锁。
+  \item \textbf{Timing 通过}：最坏情况关键路径 2600ms $<$ 约束上界 3000ms。
+  \item \textbf{Causality 通过}：从 Y1 到 sensor\_stamp\_down 和 sensor\_stamp\_up
+        的信号传播路径在拓扑图中完整连通。
+\end{itemize}
+
+%% ============================================================
+\section{技术栈与依赖}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{依赖} & \textbf{版本} & \textbf{用途} \\
+\midrule
+\texttt{pest} & 2.7 & PEG 解析器生成器 \\
+\texttt{petgraph} & 0.6 & 图数据结构与算法（SCC, BFS） \\
+\texttt{serde} & 1.0 & JSON 序列化 \\
+\texttt{thiserror} & 1.0 & 错误类型派生 \\
+\texttt{z3}（可选） & 0.12 & SMT 求解器增强安全证明 \\
+\bottomrule
+\end{tabular}
+\caption{RustPLC 依赖}
+\end{table}
+
+Rust 2024 Edition，总代码量约 7,700 行，52 个测试用例。
+
+%% ============================================================
+\section{与传统 PLC 编程的对比}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{特性} & \textbf{传统 PLC} & \textbf{RustPLC} \\
+\midrule
+安全验证 & 运行时测试 & 编译时形式化证明 \\
+互锁逻辑 & 手动编码 & 声明式约束 \\
+时序分析 & 示波器实测 & 编译器自动计算 \\
+因果追踪 & 人工审查 & 拓扑图自动验证 \\
+死锁检测 & 长时间运行观察 & SCC 静态分析 \\
+错误定位 & 调试器 & 精确行号 + 修复建议 \\
+\bottomrule
+\end{tabular}
+\caption{传统 PLC 编程 vs RustPLC}
+\end{table}
+
+%% ============================================================
+\section{深度追踪：一条安全约束如何变成数学证明}
+
+前面我们从宏观上介绍了编译器架构和验证引擎。但``自动化验证''到底是怎么实现的？
+本节以传送带冲压系统中的一条安全约束为例，逐函数、逐数据结构地追踪它从 DSL 文本
+变成数学证明的完整路径。
+
+我们追踪的目标是这一行：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+safety: stamp_head.extended conflicts_with conveyor_motor.on
+\end{Verbatim}
+
+整个过程经历 5 个阶段，涉及 12 个关键函数和 8 个数据结构。
+
+\subsection{阶段一：文本 $\to$ AST（解析）}
+
+\subsubsection{PEG 语法匹配}
+
+\texttt{pest} 解析器首先用 \texttt{plc.pest} 中的语法规则匹配这行文本。
+相关规则链为：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+constraint_declaration = { safety_constraint | timing_constraint | ... }
+
+safety_constraint = {
+    "safety" ~ ":" ~ state_reference ~ safety_relation ~ state_reference
+    ~ reason_clause?
+}
+
+state_reference = @{ identifier ~ "." ~ identifier }
+safety_relation = { "conflicts_with" | "requires" }
+\end{Verbatim}
+
+匹配结果是一棵 pest 语法树，其中 \texttt{state\_reference} 匹配到
+\texttt{stamp\_head.extended} 和 \texttt{conveyor\_motor.on}，
+\texttt{safety\_relation} 匹配到 \texttt{conflicts\_with}。
+
+\subsubsection{AST 构建}
+
+\texttt{parse\_constraints\_section()} 遍历语法树，遇到 \texttt{safety\_constraint}
+规则时调用 \texttt{parse\_safety\_constraint()}（\texttt{src/parser/mod.rs:206}）：
+
+\begin{lstlisting}[language={[ISO]C++},morekeywords={fn,let,for,match,Some,Ok,Pair,Rule}]
+fn parse_safety_constraint(pair: Pair<Rule>)
+    -> Result<SafetyConstraint, PlcError>
+{
+    let line = line_of(&pair);
+    let mut left = None;
+    let mut relation = None;
+    let mut right = None;
+    let mut reason = None;
+
+    for part in pair.into_inner() {
+        match part.as_rule() {
+            Rule::state_reference if left.is_none()
+                => left = Some(parse_state_reference(part)?),
+            Rule::safety_relation
+                => relation = Some(parse_safety_relation(part)?),
+            Rule::state_reference
+                => right = Some(parse_state_reference(part)?),
+            Rule::reason_clause
+                => reason = Some(parse_reason_clause(part)?),
+            _ => {}
+        }
+    }
+
+    Ok(SafetyConstraint { line, left, relation, right, reason })
+}
+\end{lstlisting}
+
+产出的 AST 节点为：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+SafetyConstraint {
+    line: 47,
+    left:  StateReference { device: "stamp_head",     state: "extended" },
+    relation: ConflictsWith,
+    right: StateReference { device: "conveyor_motor", state: "on" },
+    reason: Some("冲压头下压时传送带不能运行...")
+}
+\end{Verbatim}
+
+\subsection{阶段二：AST $\to$ IR（语义分析）}
+
+\texttt{build\_constraint\_set\_from\_ast()}（\texttt{src/semantic/mod.rs:104}）
+接收整个 AST，对每条 safety 约束执行两步操作：
+
+\subsubsection{步骤 2a：验证引用合法性}
+
+调用 \texttt{validate\_state\_reference()} 检查：
+\begin{itemize}
+  \item \texttt{stamp\_head} 是否在 \texttt{[topology]} 中声明过？——是，类型为 \texttt{cylinder}。
+  \item \texttt{extended} 是否是 \texttt{cylinder} 的合法状态？——是，气缸的默认状态域为 \texttt{\{extended, retracted\}}。
+  \item \texttt{conveyor\_motor} 是否存在？——是，类型为 \texttt{motor}。
+  \item \texttt{on} 是否是 \texttt{motor} 的合法状态？——是，电机的默认状态域为 \texttt{\{on, off\}}。
+\end{itemize}
+
+如果任何一项检查失败，编译器会报告精确行号和修复建议，编译终止。
+
+\subsubsection{步骤 2b：降低为 IR}
+
+验证通过后，AST 节点被转换为 IR 结构：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+SafetyRule {
+    left:     StateExpr { device: "stamp_head",     state: "extended" },
+    relation: ConflictsWith,
+    right:    StateExpr { device: "conveyor_motor", state: "on" },
+    reason:   Some("冲压头下压时传送带不能运行...")
+}
+\end{Verbatim}
+
+这个 \texttt{SafetyRule} 被存入 \texttt{ConstraintSet.safety} 向量，
+等待验证引擎消费。
+
+\subsection{阶段三：IR $\to$ SafetyModel（模型构建）}
+
+安全检查器的入口是 \texttt{verify\_safety()}（\texttt{src/verification/safety.rs:124}），
+它首先调用 \texttt{SafetyModel::from\_inputs()} 构建验证模型。这是最关键的一步。
+
+\subsubsection{步骤 3a：设备域枚举}
+
+\texttt{collect\_device\_domains()}（\texttt{safety.rs:358}）为每个设备建立有限状态域：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+DeviceDomain { name: "stamp_head",     states: ["extended","retracted"],
+               default_state: 1 }  // 初始为 retracted
+DeviceDomain { name: "conveyor_motor", states: ["on","off"],
+               default_state: 1 }  // 初始为 off
+DeviceDomain { name: "stamp_valve",    states: ["on","off"],
+               default_state: 1 }
+...（共 13 个设备）
+\end{Verbatim}
+
+同时建立两级索引：
+\begin{itemize}
+  \item \texttt{device\_index}: \texttt{"stamp\_head" $\to$ 9, "conveyor\_motor" $\to$ 7, ...}
+  \item \texttt{device\_state\_index[9]}: \texttt{"extended" $\to$ 0, "retracted" $\to$ 1}
+\end{itemize}
+
+\subsubsection{步骤 3b：转移效果提取}
+
+\texttt{transition\_effects()}（\texttt{safety.rs:430}）将状态机中每条转移的
+\texttt{action} 映射为设备状态变更。例如：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+转移: cycle.feed -> cycle.stop_belt
+  动作: set conveyor_motor on
+  效果: { device_id=7 -> state_id=0 }  // conveyor_motor := on
+
+转移: cycle.stop_belt -> cycle.press_down
+  动作: set conveyor_motor off
+  效果: { device_id=7 -> state_id=1 }  // conveyor_motor := off
+
+转移: cycle.press_down -> cycle.press_up
+  动作: extend stamp_head
+  效果: { device_id=9 -> state_id=0 }  // stamp_head := extended
+\end{Verbatim}
+
+关键观察：\texttt{extend stamp\_head} 发生在 \texttt{press\_down $\to$ press\_up}，
+而此时 \texttt{conveyor\_motor} 已经在上一步被设为 \texttt{off}。
+这正是安全约束能通过的原因——但编译器不靠``看''，它靠穷举证明。
+
+\subsubsection{步骤 3c：搜索深度规划}
+
+\texttt{scc\_minimum\_depth()}（\texttt{safety.rs:510}）用 Kosaraju 算法
+找到状态机中最大的强连通分量（SCC），取 $|\text{SCC}|+1$ 作为搜索深度下界。
+最终深度取 $\max(\text{状态数}, \text{SCC深度})$。
+
+在我们的例子中：状态机有 7 个状态（cycle 的 4 步 + fault\_handler 的 2 步 + ready），
+存在 \texttt{ready $\to$ cycle $\to$ ready} 的环路，SCC 大小为 7，
+所以搜索深度为 $\max(7, 7+1) = 8$。
+
+\subsection{阶段四：BFS 穷举搜索}
+
+\subsubsection{步骤 4a：约束绑定}
+
+\texttt{bind\_rule()}（\texttt{safety.rs:584}）将 IR 层的字符串约束绑定为数值索引：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+RuleBinding {
+    left_device:  9,   // stamp_head
+    left_state:   0,   // extended
+    right_device: 7,   // conveyor_motor
+    right_state:  0,   // on
+}
+\end{Verbatim}
+
+这样后续的冲突检测只需比较两个整数，无需字符串操作。
+
+\subsubsection{步骤 4b：BFS 展开}
+
+\texttt{analyze\_rule()}（\texttt{safety.rs:609}）是核心搜索函数。
+它维护一个 BFS 队列和一个已访问状态集：
+
+\begin{lstlisting}[language={[ISO]C++},morekeywords={fn,let,while,for,if}]
+fn analyze_rule(model, rule, max_depth) -> SearchOutcome {
+    let initial = initial_concrete_state(model);
+    // initial = (control=0, devices=[1,1,1,...,1,1,...])
+    //           所有设备处于默认状态(off/retracted)
+
+    let mut queue = VecDeque::from([initial]);
+    let mut visited = HashMap::new();
+
+    while let Some(node) = queue.pop_front() {
+        // 冲突检测：O(1) 整数比较
+        if conflicts(&node.state, rule) {
+            return counterexample(path);
+        }
+
+        if node.depth == max_depth { continue; }
+
+        for edge in outgoing_edges(node) {
+            let next = apply_edge(edge, &node.state);
+            if !visited.contains(&next) {
+                queue.push_back(next);
+            }
+        }
+    }
+
+    SearchOutcome { counterexample: None,
+                    fully_explored: true }
+}
+\end{lstlisting}
+
+\subsubsection{步骤 4c：冲突检测}
+
+\texttt{conflicts()}（\texttt{safety.rs:703}）极其简洁：
+
+\begin{lstlisting}[language={[ISO]C++},morekeywords={fn}]
+fn conflicts(state: &ConcreteState, rule: RuleBinding) -> bool {
+    state.device_states[rule.left_device] == rule.left_state
+    && state.device_states[rule.right_device] == rule.right_state
+}
+\end{lstlisting}
+
+即：当前状态中 \texttt{stamp\_head} 是否为 \texttt{extended}（索引 0），
+\textbf{同时} \texttt{conveyor\_motor} 是否为 \texttt{on}（索引 0）？
+
+\subsubsection{搜索过程可视化}
+
+以下是 BFS 展开的前几步（简化表示，仅显示两个关键设备的状态）：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{clccc}
+\toprule
+\textbf{深度} & \textbf{控制状态} & \textbf{stamp\_head} & \textbf{conveyor\_motor} & \textbf{冲突?} \\
+\midrule
+0 & cycle.feed & retracted & off & \textsf{No} \\
+1 & cycle.stop\_belt & retracted & \textbf{on} & \textsf{No} \\
+1 & fault\_handler.emergency & retracted & off & \textsf{No} \\
+2 & cycle.press\_down & retracted & \textbf{off} & \textsf{No} \\
+3 & cycle.press\_up & \textbf{extended} & \textbf{off} & \textsf{No} \\
+3 & fault\_handler.emergency & retracted & off & \textsf{No} \\
+4 & ready.wait\_start & retracted & off & \textsf{No} \\
+$\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ \\
+\bottomrule
+\end{tabular}
+\caption{BFS 搜索过程（关键设备状态追踪）}
+\end{table}
+
+注意深度 3 的关键行：\texttt{stamp\_head} 变为 \texttt{extended} 时，
+\texttt{conveyor\_motor} 已经是 \texttt{off}——因为 \texttt{stop\_belt} 步骤
+在 \texttt{press\_down} 之前执行了 \texttt{set conveyor\_motor off}。
+
+BFS 在深度 8 穷尽了所有可达状态，没有发现任何一个状态同时满足
+\texttt{stamp\_head=extended} 且 \texttt{conveyor\_motor=on}。
+
+\subsection{阶段五：证明判定与报告}
+
+\subsubsection{收敛判定}
+
+回到 \texttt{analyze\_rule()} 的返回值：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+SearchOutcome {
+    counterexample: None,     // 未找到反例
+    fully_explored: true,     // 深度 8 内无新状态
+}
+\end{Verbatim}
+
+\texttt{fully\_explored = true} 意味着 $\text{Reach}_8 = \text{Reach}_9$，
+即状态空间已收敛。这等价于 $k$-归纳的归纳步成立：
+
+\[
+\text{Reach}_8 = \text{Reach}_\infty \implies \forall \sigma \in \text{Reach}_\infty : \neg(\text{stamp\_head.extended} \wedge \text{conveyor\_motor.on})
+\]
+
+\subsubsection{报告生成}
+
+\texttt{verify\_safety\_with\_config()}（\texttt{safety.rs:132}）汇总所有约束的检查结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+SafetyReport {
+    level: Complete,          // 完备证明
+    explored_depth: 8,
+    warnings: [],             // 无警告
+}
+\end{Verbatim}
+
+最终由 \texttt{verify\_all()}（\texttt{verification/mod.rs:54}）将四个引擎的结果
+汇总为 \texttt{VerificationSummary}，输出到 stderr：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+验证通过：
+  - Safety: 完备证明（深度 8）
+\end{Verbatim}
+
+\subsection{完整数据流总结}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  box/.style={rectangle, draw, rounded corners, minimum width=4cm, minimum height=0.8cm,
+              font=\small, fill=blue!5},
+  func/.style={rectangle, draw, minimum width=3.5cm, minimum height=0.6cm,
+               font=\scriptsize\ttfamily, fill=green!8},
+  data/.style={rectangle, draw, dashed, minimum width=3.5cm, minimum height=0.6cm,
+               font=\scriptsize, fill=yellow!8},
+  arr/.style={-{Stealth[length=2.5mm]}, thick},
+  node distance=0.8cm
+]
+  \node[data] (src) {DSL 文本: \texttt{safety: stamp\_head.extended ...}};
+  \node[func, below=of src] (f1) {parse\_safety\_constraint()};
+  \node[data, below=of f1] (ast) {AST::SafetyConstraint};
+  \node[func, below=of ast] (f2) {build\_constraint\_set\_from\_ast()};
+  \node[data, below=of f2] (ir) {IR::SafetyRule};
+  \node[func, below=of ir] (f3) {SafetyModel::from\_inputs()};
+  \node[data, below=of f3] (model) {SafetyModel + RuleBinding};
+  \node[func, below=of model] (f4) {analyze\_rule() — BFS};
+  \node[data, below=of f4] (outcome) {SearchOutcome: 无反例 + 已收敛};
+  \node[box, below=of outcome] (proof) {完备证明 (Complete)};
+
+  \draw[arr] (src) -- (f1);
+  \draw[arr] (f1) -- (ast);
+  \draw[arr] (ast) -- (f2);
+  \draw[arr] (f2) -- (ir);
+  \draw[arr] (ir) -- (f3);
+  \draw[arr] (f3) -- (model);
+  \draw[arr] (model) -- (f4);
+  \draw[arr] (f4) -- (outcome);
+  \draw[arr] (outcome) -- (proof);
+\end{tikzpicture}
+\caption{安全约束从文本到证明的完整数据流}
+\label{fig:dataflow}
+\end{figure}
+
+\subsection{反例：如果约束被违反会怎样？}
+
+为了对比，我们看看如果把 \texttt{stop\_belt} 步骤删掉（传送带不停就冲压），
+会发生什么。编译器会在 BFS 中发现一条违反路径：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+ERROR [safety] 状态互斥违反
+  位置: <input>:47:1
+  约束: stamp_head.extended conflicts_with conveyor_motor.on
+  违反路径:
+    1. 初始状态 cycle.feed
+    2. cycle.feed --[condition；动作: set conveyor_motor on]--> cycle.press_down
+    3. cycle.press_down --[condition；动作: extend stamp_head]--> cycle.press_up
+    4. 在 cycle.press_up 检测到冲突：stamp_head.extended 与 conveyor_motor.on 同时为真
+  建议: 请在触发 conveyor_motor.on 之前确保 stamp_head.extended 已复位，
+        或调整并行/跳转逻辑避免两者同时成立
+\end{Verbatim}
+
+\texttt{render\_path()}（\texttt{safety.rs:708}）沿 BFS 的 \texttt{parent} 指针
+回溯，重建从初始状态到违反状态的完整路径，让工程师能精确定位问题。
+
+%% ============================================================
+\section{验证实验：6 个例子逐一验证四大引擎}
+
+光讲原理不够，下面我们用 6 个可运行的 \texttt{.plc} 例子，逐一触发四个验证引擎的
+通过和失败，亲眼看编译器怎么抓 bug。
+
+所有例子均在 \texttt{examples/} 目录下，可直接运行：
+\begin{Verbatim}[frame=single,fontsize=\small]
+$ cargo run -- examples/ex1_safety_pass.plc
+\end{Verbatim}
+
+%% ----------------------------------------
+\subsection{例 1：安全性验证——顺序执行，通过}
+
+场景：双气缸交替冲压，声明 \texttt{cyl\_A.extended conflicts\_with cyl\_B.extended}。
+控制逻辑是\textbf{顺序执行}：先伸 A、缩 A，再伸 B、缩 B，不会同时伸出。
+
+\begin{lstlisting}[language=PLC]
+[constraints]
+safety: cyl_A.extended conflicts_with cyl_B.extended
+    reason: "两个气缸同时伸出会发生机械碰撞"
+
+[tasks]
+task main:
+    step extend_A:
+        action: extend cyl_A
+        wait: sensor_A == true
+        timeout: 500ms -> goto fault
+    step retract_A:
+        action: retract cyl_A
+    step extend_B:
+        action: extend cyl_B
+        wait: sensor_B == true
+        timeout: 500ms -> goto fault
+    step retract_B:
+        action: retract cyl_B
+    on_complete: goto main
+\end{lstlisting}
+
+运行结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+验证通过：
+  - Safety: 完备证明（深度 7）
+  - Liveness: 通过
+  - Timing: 通过
+  - Causality: 通过
+\end{Verbatim}
+
+编译器在深度 7 穷尽了所有可达状态，数学上证明了两个气缸不可能同时伸出。
+
+%% ----------------------------------------
+\subsection{例 2：安全性验证——并行执行，失败}
+
+同样的设备和约束，但把控制逻辑改成 \texttt{parallel} 同时伸出两个气缸：
+
+\begin{lstlisting}[language=PLC]
+[tasks]
+task main:
+    step both:
+        parallel:
+            branch_A:
+                action: extend cyl_A
+            branch_B:
+                action: extend cyl_B
+\end{lstlisting}
+
+运行结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+ERROR [safety] 验证失败
+  位置: <input>:23:1
+  原因: 约束 cyl_A.extended conflicts_with cyl_B.extended
+        在可达路径上可同时成立
+  分析: 违反路径:
+        初始状态 main.both
+        -> main.both__parallel_1_fork
+        -> main.both__parallel_1_branch_1
+        -> main.both__parallel_1_join
+        在 join 检测到冲突：cyl_A.extended 与 cyl_B.extended 同时为真
+  建议: 请在触发 cyl_B.extended 之前确保 cyl_A.extended 已复位
+\end{Verbatim}
+
+编译器通过 BFS 找到了一条从初始状态到冲突状态的具体路径：
+\texttt{parallel} 的两个分支在 \texttt{join} 点汇合时，两个气缸都处于伸出状态。
+
+\textbf{对比}：例 1 和例 2 的设备、约束完全相同，唯一区别是控制逻辑。
+顺序执行通过，并行执行被拦截——这就是形式化验证的价值。
+
+%% ----------------------------------------
+\subsection{例 3：活性验证——缺少超时，失败}
+
+场景：气缸伸出后等待传感器信号，但\textbf{没有 timeout}，也没有 \texttt{allow\_indefinite\_wait}。
+
+\begin{lstlisting}[language=PLC]
+[tasks]
+task main:
+    step go:
+        action: extend cyl
+        wait: sensor == true
+        # 没有 timeout！传感器坏了就永远卡死
+    step back:
+        action: retract cyl
+    on_complete: goto main
+\end{lstlisting}
+
+运行结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+ERROR [liveness] 验证失败
+  位置: <input>:21:1
+  原因: task main.go 的 wait 条件 `sensor == true` 缺少 timeout 分支，
+        且未设置 allow_indefinite_wait
+  分析: 若传感器信号长期不满足（线路故障/执行器卡滞/设备离线），
+        控制逻辑会永久停留在该等待点
+  建议: 请为该 step 添加 `timeout: <时长> -> goto <恢复 task>`
+
+ERROR [liveness] 验证失败
+  位置: <input>:21:1
+  原因: 检测到强连通分量 [main.back, main.go] 不包含 timeout
+        或 allow_indefinite_wait 出边
+  分析: 一旦进入该循环，若条件长期不满足，流程会在环内反复执行
+        且没有超时/人工等待豁免出口
+\end{Verbatim}
+
+活性检查器报了两个问题：
+\begin{enumerate}
+  \item 单点问题：\texttt{wait} 没有 \texttt{timeout}，传感器坏了就卡死。
+  \item 结构问题：\texttt{main.go $\to$ main.back $\to$ main.go} 形成 SCC 环路，
+        环内没有任何超时出口。
+\end{enumerate}
+
+修复方法：加一行 \texttt{timeout: 500ms -> goto fault}。
+
+%% ----------------------------------------
+\subsection{例 4：时序验证——物理上不可能，失败}
+
+场景：要求 100ms 内完成，但光气缸行程就要 300ms。
+
+\begin{lstlisting}[language=PLC]
+[topology]
+device valve: solenoid_valve { connected_to: Y0, response_time: 20ms }
+device cyl: cylinder { connected_to: valve, stroke_time: 300ms,
+                       retract_time: 300ms }
+
+[constraints]
+timing: task.main must_complete_within 100ms
+    reason: "要求 100ms 完成"
+
+[tasks]
+task main:
+    step go:
+        action: extend cyl
+        wait: sensor == true
+        timeout: 500ms -> goto err
+    on_complete: goto main
+\end{lstlisting}
+
+运行结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+ERROR [timing] 验证失败
+  位置: <input>:17:1
+  原因: task.main must_complete_within 100ms；
+        最坏情况下无法在 100ms 内完成，当前关键路径为 500ms
+  分析: task main 的最坏关键路径时间 = 500ms（顺序 step 累加）
+  建议: 请放宽 must_complete_within 阈值，或缩短动作响应/行程时间
+\end{Verbatim}
+
+时序检查器沿拓扑链累加物理参数：电磁阀响应 20ms + 气缸行程 300ms = 320ms，
+加上 timeout 上界 500ms，远超 100ms 约束。这不是软件 bug，是物理定律不允许。
+
+%% ----------------------------------------
+\subsection{例 5：因果验证——接线错误，失败}
+
+场景：\texttt{valve} 实际连接的是 \texttt{cyl\_A}，但因果链声明写成了 \texttt{cyl\_B}。
+
+\begin{lstlisting}[language=PLC]
+[topology]
+device valve: solenoid_valve { connected_to: Y0 }
+device cyl_A: cylinder { connected_to: valve }
+device cyl_B: cylinder { connected_to: valve }
+device sensor: sensor { connected_to: X0, detects: cyl_A.extended }
+
+[constraints]
+# 错误：valve 连的是 cyl_A，但这里写了 cyl_B
+causality: Y0 -> valve -> cyl_B -> sensor
+\end{lstlisting}
+
+运行结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+ERROR [causality] 验证失败
+  位置: <input>:18:1
+  原因: 检测到因果链断裂：cyl_B -> sensor
+  分析: 期望链路: Y0 -> valve -> cyl_B -> sensor
+        实际链路: Y0 -> valve -> cyl_B -> ???
+  建议: 请在 [topology] 中检查 sensor 的 connected_to / detects 配置，
+        确保链路 cyl_B -> sensor 可达
+\end{Verbatim}
+
+因果检查器在拓扑图上做 BFS，发现 \texttt{cyl\_B} 到 \texttt{sensor} 之间没有连接。
+\texttt{sensor} 的 \texttt{detects} 写的是 \texttt{cyl\_A.extended}，不是 \texttt{cyl\_B}。
+这种接线错误在传统 PLC 编程中只能靠现场调试发现，RustPLC 在编译时就拦截了。
+
+%% ----------------------------------------
+\subsection{例 6：四项全部通过——完整工业场景}
+
+场景：单气缸往复，安全 + 时序 + 因果 + 活性全覆盖。
+
+\begin{lstlisting}[language=PLC]
+[constraints]
+safety: cyl.extended conflicts_with cyl.retracted
+    reason: "气缸不可能同时处于伸出和缩回状态"
+timing: task.work must_complete_within 2000ms
+    reason: "单次往复不超过 2 秒"
+causality: Y0 -> valve -> cyl -> sensor_ext
+causality: Y0 -> valve -> cyl -> sensor_ret
+
+[tasks]
+task work:
+    step push:
+        action: extend cyl
+        wait: sensor_ext == true
+        timeout: 600ms -> goto fault
+    step pull:
+        action: retract cyl
+        wait: sensor_ret == true
+        timeout: 600ms -> goto fault
+    on_complete: goto idle
+
+task fault:
+    step safe:
+        action: retract cyl
+    step alarm:
+        action: log "气缸动作超时"
+    on_complete: goto idle
+
+task idle:
+    step wait:
+        wait: start_btn == true
+        allow_indefinite_wait: true
+    on_complete: goto work
+\end{lstlisting}
+
+运行结果：
+
+\begin{Verbatim}[frame=single,fontsize=\small]
+验证通过：
+  - Safety: 完备证明（深度 6）
+  - Liveness: 通过
+  - Timing: 通过
+  - Causality: 通过
+\end{Verbatim}
+
+%% ----------------------------------------
+\subsection{实验总结}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{clcccc}
+\toprule
+\textbf{例} & \textbf{场景} & \textbf{Safety} & \textbf{Liveness} & \textbf{Timing} & \textbf{Causality} \\
+\midrule
+1 & 双缸顺序执行 & \checkmark & \checkmark & \checkmark & \checkmark \\
+2 & 双缸并行执行 & \textsf{FAIL} & \textsf{FAIL} & -- & -- \\
+3 & 等待无超时 & -- & \textsf{FAIL} & -- & -- \\
+4 & 时序过紧 & -- & -- & \textsf{FAIL} & -- \\
+5 & 因果链断裂 & -- & -- & -- & \textsf{FAIL} \\
+6 & 单缸完整场景 & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\caption{6 个例子的验证结果汇总}
+\end{table}
+
+每个验证引擎都被至少一个正例和一个反例覆盖。
+正例证明编译器不会误报，反例证明编译器能精确定位问题并给出修复建议。
+
+%% ============================================================
+\section{总结}
+
+RustPLC 将工业控制编程从``编写程序然后测试''提升到``声明意图然后证明''。
+它的五个第一性原理——有限状态、安全不变量、因果律、活性、物理时序——
+构成了一个完整的形式化验证框架。
+
+通过 6 个可运行的例子，我们验证了：
+\begin{itemize}
+  \item 安全检查器能区分顺序执行（安全）和并行执行（冲突），给出完备证明或违反路径；
+  \item 活性检查器能发现缺少超时的等待点和 SCC 死循环；
+  \item 时序检查器能根据物理参数计算最坏关键路径，拦截不可能满足的时序约束；
+  \item 因果检查器能在拓扑图上发现接线错误，精确报告断裂位置。
+\end{itemize}
+
+这正是 RustPLC 的价值所在：\textbf{让安全成为编译器的责任，而非程序员的负担}。
+
+\end{document}

@@ -1,3 +1,4 @@
+use rust_plc::codegen::{self, CodegenConfig};
 use rust_plc::error::PlcError;
 use rust_plc::ir::{ConstraintSet, StateMachine, TimingModel, TopologyGraph};
 use rust_plc::parser::parse_plc;
@@ -20,18 +21,28 @@ struct IrBundle {
 }
 
 fn main() {
-    let mut args = env::args();
-    let program = args.next().unwrap_or_else(|| "rust_plc".to_string());
+    let mut args: Vec<String> = env::args().collect();
+    let program = args.remove(0);
 
-    let Some(path) = args.next() else {
-        eprintln!("Usage: {program} <file.plc>");
-        std::process::exit(1);
-    };
-
-    if args.next().is_some() {
-        eprintln!("Usage: {program} <file.plc>");
+    if args.is_empty() {
+        eprintln!("Usage: {program} <file.plc> [--generate <output_dir>]");
         std::process::exit(1);
     }
+
+    let path = args.remove(0);
+
+    // Parse --generate flag
+    let generate_dir = if args.first().map(|a| a.as_str()) == Some("--generate") {
+        args.remove(0); // consume --generate
+        let dir = if args.is_empty() {
+            "generated".to_string()
+        } else {
+            args.remove(0)
+        };
+        Some(dir)
+    } else {
+        None
+    };
 
     if Path::new(&path).extension().and_then(|ext| ext.to_str()) != Some("plc") {
         eprintln!("Expected a .plc file path, got: {path}");
@@ -61,11 +72,31 @@ fn main() {
 
     print_success_summary(&ir_bundle.verification);
 
-    match serde_json::to_string_pretty(&ir_bundle) {
-        Ok(json) => println!("{json}"),
-        Err(err) => {
-            eprintln!("Failed to serialize IR as JSON: {err}");
-            std::process::exit(1);
+    if let Some(dir) = generate_dir {
+        let config = CodegenConfig::default();
+        let output_path = Path::new(&dir);
+        match codegen::generate_project(
+            &ir_bundle.state_machine,
+            &ir_bundle.topology,
+            &ir_bundle.timing_model,
+            &config,
+            output_path,
+        ) {
+            Ok(()) => {
+                eprintln!("代码已生成到 {dir}/");
+            }
+            Err(err) => {
+                eprintln!("代码生成失败: {err}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        match serde_json::to_string_pretty(&ir_bundle) {
+            Ok(json) => println!("{json}"),
+            Err(err) => {
+                eprintln!("Failed to serialize IR as JSON: {err}");
+                std::process::exit(1);
+            }
         }
     }
 }

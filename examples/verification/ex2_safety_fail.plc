@@ -1,0 +1,38 @@
+# 例2：安全性验证 —— 故意犯错版本
+# 场景：同上，但用 parallel 让两个气缸同时伸出
+# 预期：Safety 报错，给出违反路径
+
+[topology]
+
+device Y0: digital_output
+device Y1: digital_output
+device X0: digital_input
+device X1: digital_input
+
+device valve_A: solenoid_valve { connected_to: Y0, response_time: 20ms }
+device valve_B: solenoid_valve { connected_to: Y1, response_time: 20ms }
+
+device cyl_A: cylinder { connected_to: valve_A, stroke_time: 200ms, retract_time: 200ms }
+device cyl_B: cylinder { connected_to: valve_B, stroke_time: 200ms, retract_time: 200ms }
+
+device sensor_A: sensor { connected_to: X0, detects: cyl_A.extended }
+device sensor_B: sensor { connected_to: X1, detects: cyl_B.extended }
+
+[constraints]
+
+safety: cyl_A.extended conflicts_with cyl_B.extended
+    reason: "两个气缸同时伸出会发生机械碰撞"
+
+causality: Y0 -> valve_A -> cyl_A -> sensor_A
+causality: Y1 -> valve_B -> cyl_B -> sensor_B
+
+[tasks]
+
+# 错误做法：parallel 同时伸出两个气缸！
+task main:
+    step both:
+        parallel:
+            branch_A:
+                action: extend cyl_A
+            branch_B:
+                action: extend cyl_B

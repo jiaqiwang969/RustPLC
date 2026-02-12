@@ -1,1 +1,7 @@
 /target
+.DS_Store
+/generated
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc

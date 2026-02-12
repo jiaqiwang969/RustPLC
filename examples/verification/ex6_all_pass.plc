@@ -1,0 +1,54 @@
+# 例6：全部通过的完整工业场景
+# 场景：单气缸往复 + 安全 + 时序 + 因果 全覆盖
+# 预期：四项验证全部通过
+
+[topology]
+
+device Y0: digital_output
+device X0: digital_input
+device X1: digital_input
+device X2: digital_input
+
+device start_btn: digital_input { connected_to: X2, debounce: 20ms }
+
+device valve: solenoid_valve { connected_to: Y0, response_time: 15ms }
+device cyl: cylinder { connected_to: valve, stroke_time: 250ms, retract_time: 200ms }
+device sensor_ext: sensor { connected_to: X0, detects: cyl.extended }
+device sensor_ret: sensor { connected_to: X1, detects: cyl.retracted }
+
+[constraints]
+
+safety: cyl.extended conflicts_with cyl.retracted
+    reason: "气缸不可能同时处于伸出和缩回状态"
+
+timing: task.work must_complete_within 2000ms
+    reason: "单次往复不超过 2 秒"
+
+causality: Y0 -> valve -> cyl -> sensor_ext
+causality: Y0 -> valve -> cyl -> sensor_ret
+
+[tasks]
+
+task work:
+    step push:
+        action: extend cyl
+        wait: sensor_ext == true
+        timeout: 600ms -> goto fault
+    step pull:
+        action: retract cyl
+        wait: sensor_ret == true
+        timeout: 600ms -> goto fault
+    on_complete: goto idle
+
+task fault:
+    step safe:
+        action: retract cyl
+    step alarm:
+        action: log "气缸动作超时"
+    on_complete: goto idle
+
+task idle:
+    step wait:
+        wait: start_btn == true
+        allow_indefinite_wait: true
+    on_complete: goto work

@@ -1,0 +1,9 @@
+[package]
+name = "rustplc_runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rustplc_hal = { path = "../rustplc_hal" }
+log = "0.4"
+env_logger = "0.11"

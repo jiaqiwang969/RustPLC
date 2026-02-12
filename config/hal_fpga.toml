@@ -1,0 +1,28 @@
+# FPGA I/O 配置
+# 硬件在环模式（Mode C）— iCESugar-pro
+
+[mode]
+type = "fpga"
+
+[fpga]
+device = "icesugar-pro"
+interface = "spi"        # USB-SPI 桥接
+clock_mhz = 25
+spi_speed_khz = 1000
+
+[runtime]
+cycle_time_ms = 10       # FPGA 可支持更快的扫描周期
+max_cycles = 0
+
+# PMOD GPIO 映射
+[gpio.outputs]
+# device_name = { pmod = 1, pin = 0 }
+# valve_extend = { pmod = 1, pin = 0 }
+# valve_retract = { pmod = 1, pin = 1 }
+
+[gpio.inputs]
+# sensor_home = { pmod = 2, pin = 0 }
+# sensor_end = { pmod = 2, pin = 1 }
+
+[logging]
+level = "info"

@@ -1,0 +1,32 @@
+# 例5：因果验证 —— 故意犯错版本
+# 场景：因果链声明错误，valve 连的是 cyl_A，但链路写成了 cyl_B
+# 预期：Causality 报错（信号传不过去）
+
+[topology]
+
+device Y0: digital_output
+device X0: digital_input
+
+device valve: solenoid_valve { connected_to: Y0, response_time: 20ms }
+device cyl_A: cylinder { connected_to: valve, stroke_time: 200ms, retract_time: 200ms }
+device cyl_B: cylinder { connected_to: valve, stroke_time: 200ms, retract_time: 200ms }
+device sensor: sensor { connected_to: X0, detects: cyl_A.extended }
+
+[constraints]
+
+# 错误：valve 连的是 cyl_A，但这里写了 cyl_B
+causality: Y0 -> valve -> cyl_B -> sensor
+
+[tasks]
+
+task main:
+    step go:
+        action: extend cyl_A
+        wait: sensor == true
+        timeout: 500ms -> goto err
+    on_complete: goto main
+
+task err:
+    step handle:
+        action: retract cyl_A
+    on_complete: goto main

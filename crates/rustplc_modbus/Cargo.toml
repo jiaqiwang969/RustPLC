@@ -1,0 +1,11 @@
+[package]
+name = "rustplc_modbus"
+version = "0.1.0"
+edition = "2024"
+description = "Modbus RTU/TCP backend for RustPLC HAL"
+
+[dependencies]
+rustplc_hal = { path = "../rustplc_hal" }
+log = "0.4"
+thiserror = "1"
+# tokio-modbus = "0.14"  # uncomment when implementing

@@ -1,0 +1,53 @@
+# 例1：安全性验证 —— 正确版本
+# 场景：双气缸交替冲压，A缸和B缸不能同时伸出
+# 预期：Safety 完备证明通过（顺序执行，不会同时伸出）
+
+[topology]
+
+device Y0: digital_output
+device Y1: digital_output
+device X0: digital_input
+device X1: digital_input
+
+device valve_A: solenoid_valve { connected_to: Y0, response_time: 20ms }
+device valve_B: solenoid_valve { connected_to: Y1, response_time: 20ms }
+
+device cyl_A: cylinder { connected_to: valve_A, stroke_time: 200ms, retract_time: 200ms }
+device cyl_B: cylinder { connected_to: valve_B, stroke_time: 200ms, retract_time: 200ms }
+
+device sensor_A: sensor { connected_to: X0, detects: cyl_A.extended }
+device sensor_B: sensor { connected_to: X1, detects: cyl_B.extended }
+
+[constraints]
+
+safety: cyl_A.extended conflicts_with cyl_B.extended
+    reason: "两个气缸同时伸出会发生机械碰撞"
+
+causality: Y0 -> valve_A -> cyl_A -> sensor_A
+causality: Y1 -> valve_B -> cyl_B -> sensor_B
+
+[tasks]
+
+# 正确做法：先伸A再缩A，再伸B再缩B，顺序执行
+task main:
+    step extend_A:
+        action: extend cyl_A
+        wait: sensor_A == true
+        timeout: 500ms -> goto fault
+    step retract_A:
+        action: retract cyl_A
+    step extend_B:
+        action: extend cyl_B
+        wait: sensor_B == true
+        timeout: 500ms -> goto fault
+    step retract_B:
+        action: retract cyl_B
+    on_complete: goto main
+
+task fault:
+    step safe:
+        action: retract cyl_A
+        action: retract cyl_B
+    step log:
+        action: log "动作超时"
+    on_complete: goto main

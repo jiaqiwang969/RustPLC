@@ -1,0 +1,27 @@
+# 例3：活性验证 —— 故意犯错版本
+# 场景：等待传感器信号但没有 timeout，也没有 allow_indefinite_wait
+# 预期：Liveness 报错（传感器坏了就永远卡死）
+
+[topology]
+
+device Y0: digital_output
+device X0: digital_input
+
+device valve: solenoid_valve { connected_to: Y0, response_time: 20ms }
+device cyl: cylinder { connected_to: valve, stroke_time: 300ms, retract_time: 300ms }
+device sensor: sensor { connected_to: X0, detects: cyl.extended }
+
+[constraints]
+
+causality: Y0 -> valve -> cyl -> sensor
+
+[tasks]
+
+task main:
+    step go:
+        action: extend cyl
+        # 错误：没有 timeout，传感器坏了就永远等下去
+        wait: sensor == true
+    step back:
+        action: retract cyl
+    on_complete: goto main

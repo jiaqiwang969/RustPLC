@@ -11,7 +11,7 @@ use std::process::Command;
 
 fn example_path(file_name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
+        .join("../../examples")
         .join(file_name)
 }
 
@@ -74,7 +74,7 @@ fn compile_source_to_json(source: &str) -> Result<Value, Vec<String>> {
 
 #[test]
 fn parses_two_cylinder_example_into_verified_ir_json() {
-    let source = read_example("two_cylinder.plc");
+    let source = read_example("industrial/two_cylinder.plc");
     let ir_json = compile_source_to_json(&source).expect("two_cylinder example should compile");
 
     assert!(ir_json.get("topology").is_some());
@@ -110,7 +110,7 @@ fn parses_two_cylinder_example_into_verified_ir_json() {
 
 #[test]
 fn parses_half_rotation_example_into_verified_ir_json() {
-    let source = read_example("half_rotation.plc");
+    let source = read_example("industrial/half_rotation.plc");
     let ir_json = compile_source_to_json(&source).expect("half_rotation example should compile");
 
     let transitions = ir_json["state_machine"]["transitions"]
@@ -146,7 +146,7 @@ fn parses_half_rotation_example_into_verified_ir_json() {
 
 #[test]
 fn reports_undefined_device_for_error_example() {
-    let source = read_example("error_missing_device.plc");
+    let source = read_example("verification/error_missing_device.plc");
     let errors = compile_source_to_json(&source)
         .expect_err("error_missing_device should fail semantic checks");
 
@@ -158,7 +158,7 @@ fn reports_undefined_device_for_error_example() {
 
 #[test]
 fn reports_all_four_verifier_failures_for_combined_error_example() {
-    let source = read_example("error_all_verifiers.plc");
+    let source = read_example("verification/error_all_verifiers.plc");
     let errors = compile_source_to_json(&source)
         .expect_err("combined verifier error example should fail verification");
 
@@ -192,7 +192,7 @@ fn reports_all_four_verifier_failures_for_combined_error_example() {
 #[test]
 fn cli_prints_verified_json_and_summary_for_two_cylinder_example() {
     let output = Command::new(env!("CARGO_BIN_EXE_rust_plc"))
-        .arg(example_path("two_cylinder.plc"))
+        .arg(example_path("industrial/two_cylinder.plc"))
         .output()
         .expect("should run rust_plc binary");
 

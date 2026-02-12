@@ -1,0 +1,10 @@
+[package]
+name = "rustplc_fpga"
+version = "0.1.0"
+edition = "2024"
+description = "FPGA I/O backend for iCESugar-pro (Lattice ECP5)"
+
+[dependencies]
+rustplc_hal = { path = "../rustplc_hal" }
+log = "0.4"
+thiserror = "1"

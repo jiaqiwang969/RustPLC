@@ -1,0 +1,34 @@
+# 例4：时序验证 —— 故意犯错版本
+# 场景：要求 100ms 内完成，但气缸行程就要 300ms
+# 预期：Timing 报错（物理上不可能这么快）
+
+[topology]
+
+device Y0: digital_output
+device X0: digital_input
+
+device valve: solenoid_valve { connected_to: Y0, response_time: 20ms }
+device cyl: cylinder { connected_to: valve, stroke_time: 300ms, retract_time: 300ms }
+device sensor: sensor { connected_to: X0, detects: cyl.extended }
+
+[constraints]
+
+# 错误：100ms 根本不够，光气缸行程就 300ms
+timing: task.main must_complete_within 100ms
+    reason: "要求 100ms 完成"
+
+causality: Y0 -> valve -> cyl -> sensor
+
+[tasks]
+
+task main:
+    step go:
+        action: extend cyl
+        wait: sensor == true
+        timeout: 500ms -> goto err
+    on_complete: goto main
+
+task err:
+    step handle:
+        action: retract cyl
+    on_complete: goto main

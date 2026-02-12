@@ -1,0 +1,99 @@
+# 传送带冲压系统示例
+# 场景：工件由传送带送入，到位后冲压头下压，完成后退回，传送带继续
+# 安全约束：冲压头下压时传送带不能运行（防止工件移位）
+
+[topology]
+
+device Y0: digital_output
+device Y1: digital_output
+device X0: digital_input
+device X1: digital_input
+device X2: digital_input
+device X3: digital_input
+
+device start_button: digital_input {
+    connected_to: X3
+    debounce: 20ms
+}
+
+device conveyor_motor: motor {
+    connected_to: Y0
+    rated_speed: 30rpm
+    ramp_time: 100ms
+}
+
+device stamp_valve: solenoid_valve {
+    connected_to: Y1
+    response_time: 15ms
+}
+
+device stamp_head: cylinder {
+    connected_to: stamp_valve
+    stroke_time: 250ms
+    retract_time: 200ms
+}
+
+device sensor_in_position: sensor {
+    type: proximity
+    connected_to: X0
+    detects: conveyor_motor.position_A
+}
+
+device sensor_stamp_down: sensor {
+    type: magnetic
+    connected_to: X1
+    detects: stamp_head.extended
+}
+
+device sensor_stamp_up: sensor {
+    type: magnetic
+    connected_to: X2
+    detects: stamp_head.retracted
+}
+
+[constraints]
+
+safety: stamp_head.extended conflicts_with conveyor_motor.on
+    reason: "冲压头下压时传送带不能运行，防止工件移位导致冲压偏移"
+
+timing: task.cycle must_complete_within 3000ms
+    reason: "单个冲压周期不应超过3秒，保证产线节拍"
+
+causality: Y1 -> stamp_valve -> stamp_head -> sensor_stamp_down
+    reason: "冲压信号经电磁阀驱动冲压头，由磁性传感器确认到位"
+
+causality: Y1 -> stamp_valve -> stamp_head -> sensor_stamp_up
+    reason: "回程信号同样经电磁阀驱动，由磁性传感器确认回位"
+
+[tasks]
+
+task cycle:
+    step feed:
+        action: set conveyor_motor on
+        wait: sensor_in_position == true
+        timeout: 1500ms -> goto fault_handler
+    step stop_belt:
+        action: set conveyor_motor off
+    step press_down:
+        action: extend stamp_head
+        wait: sensor_stamp_down == true
+        timeout: 500ms -> goto fault_handler
+    step press_up:
+        action: retract stamp_head
+        wait: sensor_stamp_up == true
+        timeout: 500ms -> goto fault_handler
+    on_complete: goto ready
+
+task fault_handler:
+    step emergency:
+        action: retract stamp_head
+        action: set conveyor_motor off
+    step report:
+        action: log "冲压系统故障：动作超时，已执行安全停机"
+    on_complete: goto ready
+
+task ready:
+    step wait_start:
+        wait: start_button == true
+        allow_indefinite_wait: true
+    on_complete: goto cycle

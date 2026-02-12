@@ -1,0 +1,12 @@
+# SimBackend 配置
+# 纯虚拟模式（Mode A）— 用于 CI/单元测试
+
+[mode]
+type = "sim"
+
+[runtime]
+cycle_time_ms = 50
+max_cycles = 0          # 0 = 无限循环
+
+[logging]
+level = "info"
