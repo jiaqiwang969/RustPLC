@@ -477,6 +477,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "petgraph",
+ "rustplc_ir",
  "serde",
  "serde_json",
  "thiserror",
@@ -506,6 +507,15 @@ dependencies = [
  "serde",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "rustplc_ir"
+version = "0.1.0"
+dependencies = [
+ "petgraph",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

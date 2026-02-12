@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/rustplc_ir",
     "crates/rustplc_compiler",
     "crates/rustplc_hal",
     "crates/rustplc_runtime",
