@@ -1,0 +1,35 @@
+#cloud-config
+hostname: ubuntu-guest
+manage_etc_hosts: true
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    plain_text_passwd: "VMware123!"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN+VXTehNqZod7c/B+dW8Ky2B946nG0ud9zyzEue7LUr jqwang
+  - name: root
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN+VXTehNqZod7c/B+dW8Ky2B946nG0ud9zyzEue7LUr jqwang
+
+chpasswd:
+  expire: false
+  users:
+    - name: root
+      password: "VMware123!"
+      type: text
+
+ssh_pwauth: true
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-rustplc.conf
+    content: |
+      PermitRootLogin yes
+      PasswordAuthentication yes
+
+runcmd:
+  - systemctl restart sshd
+  - apt-get update -y || true
+  - apt-get install -y curl wget htop || true
