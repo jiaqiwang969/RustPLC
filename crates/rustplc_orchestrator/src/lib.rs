@@ -173,11 +173,14 @@ impl OrchestratorConfig {
             });
         }
         let modbus_cfg = self.modbus.as_ref();
+        let modbus_port = match (self.mode.mode_type.as_str(), modbus_cfg) {
+            ("modbus_tcp", Some(m)) => format!("{}:{}", m.host, m.port),
+            ("modbus_rtu", Some(m)) => m.serial_port.clone().unwrap_or_default(),
+            _ => String::new(),
+        };
         DeviceMapping {
             modbus: ModbusConfig {
-                port: modbus_cfg
-                    .map(|m| format!("{}:{}", m.host, m.port))
-                    .unwrap_or_default(),
+                port: modbus_port,
                 baud_rate: modbus_cfg.and_then(|m| m.baud_rate).unwrap_or(9600),
                 slave_id: modbus_cfg.map(|m| m.slave_id).unwrap_or(1),
                 cycle_time_ms: self.runtime.cycle_time_ms,
@@ -201,9 +204,16 @@ pub fn create_backend(config: &OrchestratorConfig) -> Result<Box<dyn HalBackend>
                 .map_err(OrchestratorError::HalError)?;
             Ok(Box::new(backend))
         }
-        HalMode::ModbusRtu { .. } => Err(OrchestratorError::ConfigError(
-            "Modbus RTU not yet implemented".into(),
-        )),
+        HalMode::ModbusRtu {
+            serial_port,
+            baud_rate,
+            slave_id,
+        } => {
+            let mapping = config.device_mapping();
+            let backend = ModbusBackend::connect_rtu(&serial_port, baud_rate, slave_id, &mapping)
+                .map_err(OrchestratorError::HalError)?;
+            Ok(Box::new(backend))
+        }
         HalMode::Fpga => Err(OrchestratorError::ConfigError(
             "FPGA backend not yet implemented".into(),
         )),

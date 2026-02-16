@@ -1,0 +1,28 @@
+# ex1_safety_pass.plc 专用 Modbus TCP 配置
+# 说明：当前 VM slave 仅模拟一组 extend/retract + home/end。
+# 因此将 .plc 的 A/B 动作映射到同一执行器的伸/缩过程。
+
+[mode]
+type = "modbus_tcp"
+
+[modbus]
+host = "192.168.2.7"
+port = 502
+slave_id = 1
+timeout_ms = 1000
+
+[runtime]
+cycle_time_ms = 50
+max_cycles = 0
+
+[mapping.coils]
+# 兼容映射：将 ex1 的 A/B 输出复用到 VM slave 的单缸模型
+# cyl_A -> valve_extend (coil 0)
+# cyl_B -> valve_retract (coil 1)
+cyl_A = 0
+cyl_B = 1
+
+[mapping.discrete_inputs]
+# sensor_A -> sensor_end (DI 1), sensor_B -> sensor_home (DI 0)
+sensor_A = 1
+sensor_B = 0

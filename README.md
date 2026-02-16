@@ -162,6 +162,11 @@ RustPLC/
 ├── docs/
 │   ├── rustplc_intro.tex       # 技术文档 v2 (XeLaTeX 中文)
 │   └── rustplc_v3.tex          # 技术文档 v3 (含 HAL/运行时/数字孪生)
+├── infra/
+│   ├── qemu/                   # Mode B 虚拟工厂脚本与运维文档
+│   │   └── README.md           # QEMU/Modbus 运维与地址基准约定
+│   └── acceptance/             # 交互式验收模板（脚本 + 表单 + 证据）
+│       └── mode_acceptance.html
 └── generated/                  # 代码生成输出目录
 ```
 

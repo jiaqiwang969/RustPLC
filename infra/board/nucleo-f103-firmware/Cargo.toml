@@ -1,0 +1,23 @@
+[package]
+name = "nucleo-f103-firmware"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+nb = "1.1"
+panic-halt = "0.2"
+stm32f1xx-hal = { version = "0.10", features = ["stm32f103", "rt"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
+debug = 1
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
+
+[workspace]

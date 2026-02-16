@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RustPLC 模式验收 - 交互演示平台</title>
+  <style>
+    :root {
+      --primary-color: #0056b3;
+      --highlight-color: #fff3cd;
+      --border-color: #dee2e6;
+      --success-color: #28a745;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Microsoft YaHei", sans-serif;
+      background-color: #f8f9fa;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 顶部导航 */
+    header {
+      background-color: #343a40;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 50px;
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    .status-bar { font-size: 14px; color: #adb5bd; }
+
+    /* 主容器 */
+    .main-container { display: flex; height: calc(100vh - 70px); }
+
+    /* 左栏：剧本区 */
+    .script-panel {
+      width: 35%;
+      background-color: #fff;
+      border-right: 1px solid #ccc;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-header {
+      padding: 15px;
+      background-color: #e9ecef;
+      border-bottom: 1px solid #ccc;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .script-step {
+      padding: 15px;
+      border-bottom: 1px solid #f1f1f1;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .script-step:hover { background-color: #f8f9fa; }
+    .script-step.active { border-left: 5px solid var(--primary-color); background-color: #e7f1ff; }
+    .script-step.completed { color: #888; text-decoration: line-through; background-color: #fafafa; }
+
+    .step-checkbox { margin-top: 4px; cursor: pointer; transform: scale(1.2); }
+    .role-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: white;
+      margin-bottom: 5px;
+    }
+    .role-remote { background-color: #17a2b8; } /* 远程指挥 */
+    .role-local { background-color: #6c757d; } /* 现场替身 */
+
+    .dialogue { font-size: 14px; line-height: 1.5; }
+    .instruction { font-size: 12px; color: #dc3545; margin-top: 5px; font-style: italic; }
+
+    /* 右栏：表单区 */
+    .form-panel {
+      width: 65%;
+      padding: 20px;
+      overflow-y: auto;
+      background-color: #fff;
+      scroll-behavior: smooth;
+    }
+
+    /* 区块 */
+    .test-section {
+      margin-bottom: 30px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      transition: background 0.5s;
+    }
+    .test-section.highlight {
+      background-color: var(--highlight-color);
+      border-color: #ffeeba;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    h3 {
+      margin-top: 0;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 10px;
+      color: #333;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; vertical-align: top; }
+    th { background-color: #f8f9fa; width: 30%; }
+
+    .input-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+    input[type="text"], input[type="number"] {
+      padding: 4px;
+      border: 1px solid #ced4da;
+      border-radius: 3px;
+      width: 200px;
+      max-width: 100%;
+    }
+    textarea {
+      width: 100%;
+      min-height: 70px;
+      padding: 6px;
+      border: 1px solid #ced4da;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    pre {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      padding: 10px;
+      border-radius: 4px;
+      overflow: auto;
+      margin: 8px 0 0 0;
+    }
+
+    /* 底部工具栏 */
+    .footer-action {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn-main {
+      padding: 10px 20px;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>RustPLC - 模式验收（开发板典型案例）</h1>
+  <div class="status-bar">
+    时间: <span id="now">-</span> |
+    目标: <span style="color: #28a745;">DevBoard/VM</span> |
+    备注: <span style="color: #adb5bd;">先 Mode A → Mode B(VM) → Mode B(开发板)</span>
+  </div>
+</header>
+
+<div class="main-container">
+  <div class="script-panel">
+    <div class="panel-header">验收剧本（点击执行）</div>
+
+    <div class="script-step" onclick="activateSection('sec-overview', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“先对齐模式边界：A(纯软件) / B(Modbus) / C(硬件在环)。本次以开发板接入为典型案例。”</div>
+        <div class="instruction">动作：确认本次验收范围与退出准则（exit criteria）。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-meta', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“记录版本与证据：git commit、.plc 文件、HAL 配置、现场照片/视频。”</div>
+        <div class="instruction">动作：把关键信息填入《基础信息》表单。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-mode-a', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“模式 A 冒烟：先用 SimBackend 跑通 scan cycle，确保逻辑与定时器语义没问题。”</div>
+        <div class="instruction">动作：执行命令，记录结果与日志片段。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-mode-b-vm', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“模式 B（VM slave）：启动/定位 VM，部署 Modbus slave，验证 502 端口与读写闭环。”</div>
+        <div class="instruction">动作：确认 Modbus 地址基准为 0-based（避免 +1 偏移）。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-mode-b-board', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“切换到开发板：将 Modbus slave 从 VM 替换为真实 I/O 板，复用同一套 mapping，验证物理闭环。”</div>
+        <div class="instruction">动作：现场展示连线、供电、指示灯；记录板端固件/程序版本。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-physical', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-local">现场</span>
+        <div class="dialogue">“用物理手段确认：输出电平/继电器/LED，输入通道触发，响应时间与抖动。”</div>
+        <div class="instruction">动作：示波器/万用表/逻辑分析仪，特写镜头对准读数。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-safety', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“安全与失效模式：拔网线/断电/重启/异常退出，输出是否回到 fail-safe。”</div>
+        <div class="instruction">动作：记录触发条件、观察结果与恢复步骤。</div>
+      </div>
+    </div>
+
+    <div class="script-step" onclick="activateSection('sec-artifacts', this)">
+      <input type="checkbox" class="step-checkbox">
+      <div>
+        <span class="role-tag role-remote">指挥</span>
+        <div class="dialogue">“归档：配置/日志/照片/视频/测量数据统一收口，生成验收报告。”</div>
+        <div class="instruction">动作：把证据路径粘贴到《证据归档》。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-panel">
+    <div id="sec-overview" class="test-section">
+      <h3>模式说明（边界与退出准则）</h3>
+      <table>
+        <tr>
+          <th>模式</th>
+          <th>后端/介质</th>
+          <th>验证/验收关注点</th>
+        </tr>
+        <tr>
+          <td>模式 A</td>
+          <td>SimBackend（内存 HashMap）</td>
+          <td>
+            控制逻辑正确性（相对模型）、状态机是否推进、定时器语义是否符合预期、生成代码可运行。<br>
+            <b>退出准则</b>：至少 1 个典型 .plc 冒烟通过；日志无 panic；cycle 稳定。
+          </td>
+        </tr>
+        <tr>
+          <td>模式 B</td>
+          <td>ModbusBackend（TCP/RTU）</td>
+          <td>
+            I/O 映射一致性（设备名 + 地址基准）、通信稳定性、闭环是否可推进（DI 能随 COIL 变化）。<br>
+            <b>退出准则</b>：主控可持续读写；关键状态转移发生；无地址偏移（0-based）。
+          </td>
+        </tr>
+        <tr>
+          <td>模式 C</td>
+          <td>硬件在环（开发板/FPGA/真实 I/O）</td>
+          <td>
+            物理电平/时序/抖动、抗干扰、失效安全（fail-safe）、现场可操作性与可追溯性（证据）。<br>
+            <b>退出准则</b>：物理测量满足阈值；异常情况下输出回落；证据归档完整。
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="sec-meta" class="test-section">
+      <h3>基础信息（可追溯）</h3>
+      <table>
+        <tr><th>项目/对象</th><td><input type="text" data-field="project" placeholder="例如：RustPLC 开发板接入验收"></td></tr>
+        <tr><th>操作者</th><td><input type="text" data-field="operator" placeholder="姓名/ID"></td></tr>
+        <tr><th>git commit</th><td><input type="text" data-field="git_commit" placeholder="例如：git rev-parse --short HEAD"></td></tr>
+        <tr><th>.plc 文件</th><td><input type="text" data-field="plc_file" placeholder="例如：examples/verification/ex1_safety_pass.plc"></td></tr>
+        <tr><th>HAL 配置</th><td><input type="text" data-field="hal_config" placeholder="例如：config/hal_modbus_tcp.toml / config/hal_fpga.toml"></td></tr>
+        <tr><th>开发板型号</th><td><input type="text" data-field="board_model" placeholder="例如：iCESugar-pro / 自研 I/O 板"></td></tr>
+        <tr><th>开发板版本/固件</th><td><input type="text" data-field="board_fw" placeholder="版本号/编译时间/commit"></td></tr>
+      </table>
+    </div>
+
+    <div id="sec-mode-a" class="test-section">
+      <h3>模式 A：SimBackend 冒烟</h3>
+      <table>
+        <tr>
+          <th>检查项</th>
+          <th>结果</th>
+        </tr>
+        <tr>
+          <td>cargo test（至少覆盖 orchestrator/runtime/编译器）</td>
+          <td>
+            <label><input type="checkbox" data-field="mode_a_cargo_test_ok"> 通过</label><br>
+            <textarea data-field="mode_a_cargo_test_log" placeholder="粘贴关键输出（可选）"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <td>生成并运行（SimBackend）</td>
+          <td>
+            <label><input type="checkbox" data-field="mode_a_codegen_run_ok"> 通过</label><br>
+            <textarea data-field="mode_a_codegen_run_log" placeholder="粘贴关键输出（可选）"></textarea>
+          </td>
+        </tr>
+      </table>
+      <pre>示例命令：
+cargo test
+cargo run -p rust_plc -- examples/verification/ex1_safety_pass.plc --generate /tmp/out_sim --hal-config config/hal_sim.toml
+cd /tmp/out_sim && cargo run</pre>
+    </div>
+
+    <div id="sec-mode-b-vm" class="test-section">
+      <h3>模式 B：VM (Modbus TCP slave)</h3>
+      <table>
+        <tr><th>检查项</th><th>标准/预期</th><th>结果</th></tr>
+        <tr>
+          <td>VM IP 可达</td>
+          <td>能找到 IP；SSH 可连接</td>
+          <td>
+            <label><input type="checkbox" data-field="mode_b_vm_ip_ok"> 通过</label>
+            <input type="text" data-field="mode_b_vm_ip" placeholder="例如：192.168.2.7">
+          </td>
+        </tr>
+        <tr>
+          <td>502 端口</td>
+          <td>nc 检查 TCP OK</td>
+          <td><label><input type="checkbox" data-field="mode_b_vm_502_ok"> 通过</label></td>
+        </tr>
+        <tr>
+          <td>闭环读写</td>
+          <td>日志出现 ReadDiscreteInputs/WriteMultipleCoils；DI 会随输出变化</td>
+          <td>
+            <label><input type="checkbox" data-field="mode_b_vm_loop_ok"> 通过</label><br>
+            <textarea data-field="mode_b_vm_loop_log" placeholder="粘贴关键日志（可选）"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <td>地址基准</td>
+          <td>0-based（主控 0 对齐 slave 0）</td>
+          <td><label><input type="checkbox" data-field="mode_b_vm_0_based_ok"> 确认</label></td>
+        </tr>
+      </table>
+      <pre>常用命令：
+source infra/qemu/_lib.sh && find_guest_ip "52:54:00:12:34:01"
+bash infra/qemu/deploy-slave.sh
+nc -z -w 3 &lt;VM_IP&gt; 502</pre>
+    </div>
+
+    <div id="sec-mode-b-board" class="test-section">
+      <h3>开发板：替换为真实 I/O (Modbus slave / 其他)</h3>
+      <table>
+        <tr><th>检查项</th><th>标准/预期</th><th>结果</th></tr>
+        <tr>
+          <td>端点</td>
+          <td>填写实际 slave 端点（TCP: ip:502 或串口等）</td>
+          <td><input type="text" data-field="board_endpoint" placeholder="例如：192.168.2.88:502 / /dev/ttyUSB0@9600"></td>
+        </tr>
+        <tr>
+          <td>连线与供电</td>
+          <td>电源电压稳定；地线共地；端子/引脚连接正确</td>
+          <td>
+            <label><input type="checkbox" data-field="board_wiring_ok"> 通过</label><br>
+            <textarea data-field="board_wiring_note" placeholder="记录电源/线序/接线图链接（可选）"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <td>I/O mapping 一致性</td>
+          <td>.plc 设备名 与 hal_config.toml mapping key 完全一致；地址基准一致</td>
+          <td><label><input type="checkbox" data-field="board_mapping_ok"> 通过</label></td>
+        </tr>
+        <tr>
+          <td>闭环可推进</td>
+          <td>执行器动作可观测；输入触发后状态机前进</td>
+          <td>
+            <label><input type="checkbox" data-field="board_loop_ok"> 通过</label><br>
+            <textarea data-field="board_loop_note" placeholder="记录观察到的状态转移/动作（可选）"></textarea>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="sec-physical" class="test-section">
+      <h3>物理检测（电平/时序/抖动）</h3>
+      <table>
+        <tr>
+          <th>通道</th>
+          <th>期望</th>
+          <th>实测</th>
+        </tr>
+        <tr>
+          <td>DO1（输出）</td>
+          <td>逻辑 1/0 电平满足阈值；上升/下降沿可观测</td>
+          <td>
+            <div class="input-group">
+              <input type="text" data-field="phys_do1_voltage" placeholder="电压/电流，例如 3.3V">
+              <input type="text" data-field="phys_do1_rise" placeholder="上升沿/延迟，例如 2ms">
+              <label><input type="checkbox" data-field="phys_do1_ok"> 合格</label>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>DI1（输入）</td>
+          <td>触发后主控周期内可读到；去抖策略符合预期</td>
+          <td>
+            <div class="input-group">
+              <input type="text" data-field="phys_di1_latency" placeholder="触发到读取延迟，例如 1~2 cycle">
+              <input type="text" data-field="phys_di1_bounce" placeholder="抖动/滤波备注">
+              <label><input type="checkbox" data-field="phys_di1_ok"> 合格</label>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>周期抖动</td>
+          <td>cycle_time_ms 近似稳定；满足场景要求</td>
+          <td>
+            <div class="input-group">
+              <input type="text" data-field="phys_cycle_jitter" placeholder="例如：p95=±1ms">
+              <label><input type="checkbox" data-field="phys_cycle_ok"> 合格</label>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <pre>建议证据（任选其一/组合）：
+- 示波器截图：输出电平 + 触发对齐
+- 逻辑分析仪：SPI/UART/Modbus 帧 + 时间戳
+- 现场视频：LED/继电器动作与上位机日志同时入镜</pre>
+    </div>
+
+    <div id="sec-safety" class="test-section">
+      <h3>安全与失效模式（Fail-safe）</h3>
+      <table>
+        <tr><th>测试项</th><th>触发方式</th><th>期望</th><th>结果</th></tr>
+        <tr>
+          <td>通信丢失</td>
+          <td>拔网线 / slave 断电</td>
+          <td>输出回落到安全态（例如全部 OFF）；恢复后可重新进入主循环</td>
+          <td>
+            <label><input type="checkbox" data-field="safety_link_loss_ok"> 合格</label><br>
+            <textarea data-field="safety_link_loss_note" placeholder="记录现象与恢复步骤"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <td>主控异常退出</td>
+          <td>kill runtime / panic（测试场景）</td>
+          <td>输出不会悬挂在危险态；现场可复位</td>
+          <td>
+            <label><input type="checkbox" data-field="safety_master_crash_ok"> 合格</label>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="sec-artifacts" class="test-section">
+      <h3>证据归档（流程化管理）</h3>
+      <table>
+        <tr>
+          <th>日志/输出</th>
+          <td>
+            <textarea data-field="artifact_logs" placeholder="粘贴日志文件路径/关键片段，例如：/tmp/plc_runtime.log"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <th>配置与版本</th>
+          <td>
+            <textarea data-field="artifact_configs" placeholder="hal_config.toml、生成代码目录、板端固件等"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <th>照片/视频/截图</th>
+          <td>
+            <textarea data-field="artifact_media" placeholder="粘贴证据路径（建议包含时间戳）"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <th>结论</th>
+          <td>
+            <label><input type="radio" name="final_result" value="pass" data-field="final_result"> 通过</label>
+            <label><input type="radio" name="final_result" value="fail" data-field="final_result"> 不通过</label>
+            <label><input type="radio" name="final_result" value="block" data-field="final_result"> 阻塞</label>
+            <textarea data-field="final_note" placeholder="结论说明/遗留问题/下一步"></textarea>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="height: 100px;"></div>
+  </div>
+</div>
+
+<div class="footer-action">
+  <button class="btn-main" onclick="downloadReport()">生成验收报告(JSON)</button>
+</div>
+
+<script>
+  function activateSection(sectionId, element) {
+    document.querySelectorAll('.test-section').forEach(el => el.classList.remove('highlight'));
+    document.querySelectorAll('.script-step').forEach(el => el.classList.remove('active'));
+
+    element.classList.add('active');
+
+    const checkbox = element.querySelector('.step-checkbox');
+    if (checkbox && !checkbox.checked) {
+      checkbox.checked = true;
+      element.classList.add('completed');
+    }
+
+    const targetSection = document.getElementById(sectionId);
+    if (targetSection) {
+      targetSection.classList.add('highlight');
+      targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  document.querySelectorAll('.step-checkbox').forEach(cb => {
+    cb.addEventListener('change', function (e) {
+      const step = this.closest('.script-step');
+      if (this.checked) {
+        step.classList.add('completed');
+      } else {
+        step.classList.remove('completed');
+      }
+      e.stopPropagation();
+    });
+  });
+
+  function collectFields() {
+    const data = {};
+    document.querySelectorAll('[data-field]').forEach(el => {
+      const key = el.getAttribute('data-field');
+      if (!key) return;
+      if (el.type === 'checkbox') {
+        data[key] = !!el.checked;
+      } else if (el.type === 'radio') {
+        if (el.checked) data[key] = el.value;
+      } else {
+        data[key] = el.value;
+      }
+    });
+    return data;
+  }
+
+  function downloadReport() {
+    const report = {
+      schema: "rustplc.acceptance.v1",
+      generated_at: new Date().toISOString(),
+      data: collectFields(),
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "rustplc_acceptance_report.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    alert("报告已生成：rustplc_acceptance_report.json（浏览器下载目录）");
+  }
+
+  // Initialize header time
+  (function init() {
+    const nowEl = document.getElementById('now');
+    if (nowEl) nowEl.textContent = new Date().toLocaleString('zh-CN');
+  })();
+</script>
+
+</body>
+</html>
+

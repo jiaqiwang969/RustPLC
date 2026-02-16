@@ -1,0 +1,28 @@
+# iCESugar-pro v1.3（FPGA）— Modbus RTU 配置模板
+#
+# 说明：
+# - 该板在 Mode C（硬件在环）里通常作为 Modbus RTU slave（UART）提供确定性 I/O。
+# - `serial_port` 需要替换成 macOS 实际枚举出的端口（例如 /dev/cu.usbserial-xxxx）。
+# - 具体 coils/DI 地址请以 FPGA bitstream 的寄存器映射为准。
+
+[mode]
+type = "modbus_rtu"
+
+[modbus]
+serial_port = "/dev/cu.usbserial-REPLACE_ME"
+baud_rate = 115200
+slave_id = 1
+timeout_ms = 1000
+
+[runtime]
+cycle_time_ms = 10
+max_cycles = 0
+
+[mapping.coils]
+valve_extend = 0
+valve_retract = 1
+
+[mapping.discrete_inputs]
+sensor_home = 0
+sensor_end = 1
+

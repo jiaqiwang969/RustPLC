@@ -25,24 +25,41 @@ fn main() {
     let program = args.remove(0);
 
     if args.is_empty() {
-        eprintln!("Usage: {program} <file.plc> [--generate <output_dir>]");
+        eprintln!("Usage: {program} <file.plc> [--generate <output_dir>] [--hal-config <path>]");
         std::process::exit(1);
     }
 
     let path = args.remove(0);
 
-    // Parse --generate flag
-    let generate_dir = if args.first().map(|a| a.as_str()) == Some("--generate") {
-        args.remove(0); // consume --generate
-        let dir = if args.is_empty() {
-            "generated".to_string()
-        } else {
-            args.remove(0)
-        };
-        Some(dir)
-    } else {
-        None
-    };
+    // Parse flags
+    let mut generate_dir = None;
+    let mut hal_config_path = None;
+
+    while !args.is_empty() {
+        match args[0].as_str() {
+            "--generate" => {
+                args.remove(0);
+                let dir = if args.is_empty() || args[0].starts_with("--") {
+                    "generated".to_string()
+                } else {
+                    args.remove(0)
+                };
+                generate_dir = Some(dir);
+            }
+            "--hal-config" => {
+                args.remove(0);
+                if args.is_empty() {
+                    eprintln!("--hal-config requires a path argument");
+                    std::process::exit(1);
+                }
+                hal_config_path = Some(args.remove(0));
+            }
+            other => {
+                eprintln!("Unknown argument: {other}");
+                std::process::exit(1);
+            }
+        }
+    }
 
     if Path::new(&path).extension().and_then(|ext| ext.to_str()) != Some("plc") {
         eprintln!("Expected a .plc file path, got: {path}");
@@ -89,6 +106,16 @@ fn main() {
                 eprintln!("代码生成失败: {err}");
                 std::process::exit(1);
             }
+        }
+
+        // Copy HAL config into generated project if provided
+        if let Some(ref hal_cfg) = hal_config_path {
+            let dest = output_path.join("hal_config.toml");
+            if let Err(err) = fs::copy(hal_cfg, &dest) {
+                eprintln!("复制 HAL 配置失败: {hal_cfg} -> {}: {err}", dest.display());
+                std::process::exit(1);
+            }
+            eprintln!("HAL 配置已复制到 {}", dest.display());
         }
     } else {
         match serde_json::to_string_pretty(&ir_bundle) {

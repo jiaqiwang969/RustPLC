@@ -1,0 +1,25 @@
+# NUCLEO-F103RB (DAPLink VCP) Modbus RTU template
+#
+# Use this when RustPLC runtime runs on the same host that can open /dev/ttyACM0.
+# Default mapping is aligned with infra/board/nucleo-f103-firmware/src/bin/modbus_slave.rs.
+
+[mode]
+type = "modbus_rtu"
+
+[modbus]
+serial_port = "/dev/ttyACM0"
+baud_rate = 115200
+slave_id = 1
+timeout_ms = 1000
+
+[runtime]
+cycle_time_ms = 20
+max_cycles = 0
+
+[mapping.coils]
+valve_extend = 0
+valve_retract = 1
+
+[mapping.discrete_inputs]
+sensor_home = 0
+sensor_end = 1

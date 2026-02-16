@@ -4,6 +4,8 @@ use std::collections::HashMap;
 pub struct SimBackend {
     inputs: HashMap<String, bool>,
     outputs: HashMap<String, bool>,
+    registers_in: HashMap<String, u16>,
+    registers_out: HashMap<String, u16>,
 }
 
 impl SimBackend {
@@ -11,6 +13,8 @@ impl SimBackend {
         Self {
             inputs: HashMap::new(),
             outputs: HashMap::new(),
+            registers_in: HashMap::new(),
+            registers_out: HashMap::new(),
         }
     }
 
@@ -20,6 +24,14 @@ impl SimBackend {
 
     pub fn get_output(&self, device: &str) -> Option<bool> {
         self.outputs.get(device).copied()
+    }
+
+    pub fn set_register_input(&mut self, device: &str, value: u16) {
+        self.registers_in.insert(device.to_string(), value);
+    }
+
+    pub fn get_register_output(&self, device: &str) -> Option<u16> {
+        self.registers_out.get(device).copied()
     }
 }
 
@@ -44,5 +56,13 @@ impl HalBackend for SimBackend {
 
     fn flush_outputs(&mut self) -> Result<(), HalError> {
         Ok(())
+    }
+
+    fn read_register(&self, device: &str) -> u16 {
+        self.registers_in.get(device).copied().unwrap_or(0)
+    }
+
+    fn write_register(&mut self, device: &str, value: u16) {
+        self.registers_out.insert(device.to_string(), value);
     }
 }
