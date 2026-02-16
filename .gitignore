@@ -1,6 +1,7 @@
 /target
 .DS_Store
 /generated
+output_*/
 docs/*.aux
 docs/*.log
 docs/*.out
@@ -10,3 +11,13 @@ docs/*.toc
 infra/qemu/iso/
 infra/qemu/vm/
 infra/qemu/cloud-init/seed.iso
+infra/esxi/
+
+# Acceptance / board test evidence and build outputs
+infra/acceptance/evidence/
+infra/board/remote/evidence/
+infra/board/**/build/
+infra/board/**/target/
+
+# Local Claude/Codex workspace artifacts
+.entire/
